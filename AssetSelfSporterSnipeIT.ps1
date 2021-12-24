@@ -162,7 +162,7 @@ $RequiredModules | ForEach-Object {
         If (!(Get-Module -ListAvailable -Name $Mdle)) {
             WriteLog -Log "$Mdle not found. Installing...";
             If ($_ -eq 'ActiveDirectory') {
-                Add-WindowsCapability –Online –Name "Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0";
+                Add-WindowsCapability -Online -Name "Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0";
                 Install-WindowsFeature RSAT-AD-PowerShell;
             } Else { Install-Module -Name $Mdle -Force; }
         } Else {
