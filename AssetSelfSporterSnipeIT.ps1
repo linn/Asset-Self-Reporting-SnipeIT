@@ -1,3 +1,6 @@
+# Source the $snipeitapi secret and $snipeiturl from external file
+. "$PSScriptRoot\snipecreds.ps1"
+
 #####################################################################################################################################
 # Configs
 #####################################################################################################################################
@@ -25,8 +28,8 @@ $DellApi =@{
 
 # If you want to use this to update SnipeIT, you will need to make script changes to the custom fields in the code below.
 $Snipe = @{
-    Url = "";
-    Token = "";
+    Url = $snipeiturl;
+    Token = $snipeitapi;
     DefStatusID = 8;
     WorkstationCatID = 12;
     ServerCatID = 8;
