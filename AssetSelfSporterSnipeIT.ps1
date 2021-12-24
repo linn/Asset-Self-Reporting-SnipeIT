@@ -1,5 +1,5 @@
 # Source the $snipeitapi secret and $snipeiturl from external file
-. "$PSScriptRoot\snipecreds.ps1"
+. "$PSScriptRoot\config.ps1"
 
 #####################################################################################################################################
 # Configs
