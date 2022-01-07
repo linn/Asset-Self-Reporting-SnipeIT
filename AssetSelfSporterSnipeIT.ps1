@@ -894,51 +894,58 @@ Try {
 # SCCM Check-In
 #####################################################################################################################################
 
-If ($DataObject.OS -notlike "*Server*") {
-    Try {
-        $SMSCli = [wmiclass] "root\ccm:sms_client";
-        If (-NOT (Get-WmiObject -Namespace root\ccm -Class SMS_Client)) {
-	        Stop-Service -Force winmgmt -ErrorAction SilentlyContinue;
-   	        Set-Location  C:\Windows\System32\Wbem\;
-   	        Remove-Item C:\Windows\System32\Wbem\Repository.old -Force -ErrorAction SilentlyContinue;
-   	        Rename-Item Repository Repository.old -ErrorAction SilentlyContinue;
-   	        Start-Service winmgmt;
-        }
-        If (Get-Service -Name CcmExec) {
-	        $CcmExecStatus = Get-Service -Name CcmExec | ForEach-Object { $_.status; };
-	        $BITSStatus = Get-Service -Name BITS | ForEach-Object { $_.status; };
-	        $WuauservStatus = Get-Service -Name wuauserv | ForEach-Object { $_.status; };
-	        $WinmgmtStatus = Get-Service -Name Winmgmt | ForEach-Object { $_.status; };
-	        If ($CcmExecStatus -eq "Stopped") { Get-Service -Name CcmExec | Start-Service; }
-	        If ($BITSStatus -eq "Stopped") { Get-Service -Name BITS | Start-Service; }
-	        If ($WuauservStatus -eq "Stopped") { Get-Service -Name wuauserv | Start-Service; }
-	        If ($WinmgmtStatus -eq "Stopped") { Get-Service -Name Winmgmt | Start-Service; }
-	        $MachinePolicyRetrievalEvaluation = "{00000000-0000-0000-0000-000000000021}";
-	        $SoftwareUpdatesScan = "{00000000-0000-0000-0000-000000000113}";
-	        $SoftwareUpdatesDeployment = "{00000000-0000-0000-0000-000000000108}";
-	        $MachineStatus = Invoke-WmiMethod -Namespace root\ccm -Class sms_client -Name TriggerSchedule $MachinePolicyRetrievalEvaluation;
-	        $SoftwareStatus = Invoke-WmiMethod -Namespace root\ccm -Class sms_client -Name TriggerSchedule $SoftwareUpdatesScan;
-	        $SoftwareDeployStatus = Invoke-WmiMethod -Namespace root\ccm -Class sms_client -Name TriggerSchedule $SoftwareUpdatesDeployment;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000121}" -ErrorAction SilentlyContinue | Out-Null; 
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000003}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000010}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000001}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000022}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000002}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000031}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000114}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000111}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000026}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000027}" -ErrorAction SilentlyContinue | Out-Null;
-            Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000032}" -ErrorAction SilentlyContinue | Out-Null;
-	        If ($MachineStatus -AND $SoftwareStatus -AND $SoftwareDeployStatus) { 
-                WriteLog -Log "[SUCCESS] SCCM Check-In Successful."; 
-            } Else {
-		        $SMSCli.RepairClient();
-                WriteLog -Log "[ERROR] SCCM Check-In Unsuccessful.";
-	        }
-        } Else { WriteLog -Log "[ERROR] SCCM Does Not Appear to be Installed."; }
-    } Catch { WriteLog -Log "[ERROR] Error Checking In with SCCM." -Data $_; }
+If ($UseSCCM -eq $true) {
+
+    If ($DataObject.OS -notlike "*Server*") {
+        Try {
+            $SMSCli = [wmiclass] "root\ccm:sms_client";
+            If (-NOT (Get-WmiObject -Namespace root\ccm -Class SMS_Client)) {
+                Stop-Service -Force winmgmt -ErrorAction SilentlyContinue;
+                Set-Location  C:\Windows\System32\Wbem\;
+                Remove-Item C:\Windows\System32\Wbem\Repository.old -Force -ErrorAction SilentlyContinue;
+                Rename-Item Repository Repository.old -ErrorAction SilentlyContinue;
+                Start-Service winmgmt;
+            }
+            If (Get-Service -Name CcmExec) {
+                $CcmExecStatus = Get-Service -Name CcmExec | ForEach-Object { $_.status; };
+                $BITSStatus = Get-Service -Name BITS | ForEach-Object { $_.status; };
+                $WuauservStatus = Get-Service -Name wuauserv | ForEach-Object { $_.status; };
+                $WinmgmtStatus = Get-Service -Name Winmgmt | ForEach-Object { $_.status; };
+                If ($CcmExecStatus -eq "Stopped") { Get-Service -Name CcmExec | Start-Service; }
+                If ($BITSStatus -eq "Stopped") { Get-Service -Name BITS | Start-Service; }
+                If ($WuauservStatus -eq "Stopped") { Get-Service -Name wuauserv | Start-Service; }
+                If ($WinmgmtStatus -eq "Stopped") { Get-Service -Name Winmgmt | Start-Service; }
+                $MachinePolicyRetrievalEvaluation = "{00000000-0000-0000-0000-000000000021}";
+                $SoftwareUpdatesScan = "{00000000-0000-0000-0000-000000000113}";
+                $SoftwareUpdatesDeployment = "{00000000-0000-0000-0000-000000000108}";
+                $MachineStatus = Invoke-WmiMethod -Namespace root\ccm -Class sms_client -Name TriggerSchedule $MachinePolicyRetrievalEvaluation;
+                $SoftwareStatus = Invoke-WmiMethod -Namespace root\ccm -Class sms_client -Name TriggerSchedule $SoftwareUpdatesScan;
+                $SoftwareDeployStatus = Invoke-WmiMethod -Namespace root\ccm -Class sms_client -Name TriggerSchedule $SoftwareUpdatesDeployment;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000121}" -ErrorAction SilentlyContinue | Out-Null; 
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000003}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000010}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000001}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000022}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000002}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000031}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000114}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000111}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000026}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000027}" -ErrorAction SilentlyContinue | Out-Null;
+                Invoke-WMIMethod -Namespace root\ccm -Class SMS_CLIENT -Name TriggerSchedule "{00000000-0000-0000-0000-000000000032}" -ErrorAction SilentlyContinue | Out-Null;
+                Write-host $MachineStatus
+                Write-host $SoftwareStatus
+                Write-Host $SoftwareDeployStatus
+                If ($MachineStatus -AND $SoftwareStatus -AND $SoftwareDeployStatus) { 
+                    WriteLog -Log "[SUCCESS] SCCM Check-In Successful."; 
+                } Else {
+                    $SMSCli.RepairClient();
+                    WriteLog -Log "[ERROR] SCCM Check-In Unsuccessful.";
+                }
+            } Else { WriteLog -Log "[ERROR] SCCM Does Not Appear to be Installed."; }
+        } Catch { WriteLog -Log "[ERROR] Error Checking In with SCCM." -Data $_; }
+    }
+
 }
 
 #########################################
