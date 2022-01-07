@@ -14,9 +14,9 @@ $CsvFilePath = "";
 
 # Send Emails when Critical Data has seen an Update or when new Assets report
 $EmailParams = @{
-    From = "";
-    To = "";
-    SMTPServer = "";
+    From = $smtpfrom;
+    To = $smtpto;
+    SMTPServer = $smtpserver;
     port = "25";
 }
 
