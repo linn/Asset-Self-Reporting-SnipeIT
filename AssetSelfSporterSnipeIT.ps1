@@ -186,7 +186,9 @@ $RequiredModules | ForEach-Object {
 }
 WriteLog -Log "Requirements Installed and Loaded.";
 
+## Connect-SnipeitPS will exit if the connection fails. No need to check if the connection has succeeded or not.
 Connect-SnipeitPS -URL $Snipe.Url -apiKey $Snipe.Token;
+WriteLog -Log "Connected to SnipeIT - Linn Asset Management System";
 
 #####################################################################################################################################
 # General Device Information
