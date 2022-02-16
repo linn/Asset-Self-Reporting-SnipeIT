@@ -597,24 +597,40 @@ $CustomValues.Add('_snipeit_remote_desktop_users_19', $DataHashTable['RemoteUser
 If (!$SnipeAsset) {
     Try {
         Try {
+            WriteLog -Log "Finding Manufacturer in SnipeIT";
             $Manufacturer = Get-SnipeItManufacturer -search $DataHashTable['Manufacturer'];
             If (!$Manufacturer) { $Manufacturer = New-SnipeItManufacturer -name $DataHashTable['Manufacturer']; }
             $ManufacturerID = $Manufacturer.id;
         } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to obtain Manufacturer ID." -Data $_; }
         Try {
+            $String = "Checking for model " + $($DataHashTable['Model']);
+            WriteLog -Log $String;
             $Model = Get-SnipeItModel -all | Where-Object { $_.name -eq "$($DataHashTable['Model'])" };
+            $String = "Retrieved " + $Model + " from SnipeIT";
             $ModelData = $Model.notes -replace "&quot;",'"' | ConvertFrom-Json;
             If ($ModelData.LatestBios -gt $DataHashTable['Bios']) {
                 ##########################################
             }
-            If ($Model.total -eq 0) {
-                If ($DataHashTable['OS'] -Contains "Server") { $ModelCatID = $Snipe.ServerCatID; } 
-                Else { $ModelCatID = $Snipe.WorkstationCatID; }
+            $String = "Recieved $($Model.total) results";
+            WriteLog -Log $String;
+            If ($Model.Count -eq 0) {
+                If ($DataHashTable['OS'] -Contains "Server") { 
+                    $ModelCatID = $Snipe.ServerCatID; 
+                } Else { 
+                    $ModelCatID = $Snipe.WorkstationCatID; 
+                }
+                WriteLog -Log "Creating a new model!";
+                Write-Host $DataHashTable['Model'];
+                Write-Host $ManufacturerID;
+                Write-Host $Snipe.FieldSetID
+                Write-Host $ModelCatID
                 $Model = New-SnipeItModel -name $DataHashTable['Model'] -manufacturer_id $ManufacturerID -fieldset_id $Snipe.FieldSetID -category_id $ModelCatID;
             }
         } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to obtain Model ID." -Data $_; }
+        WriteLog -Log "About to create new snipe asset";
         ## FIXME - The StatusID needs to change depending on the state of the machine
         $SnipeAsset = New-SnipeItAsset -name $DataHashTable['DeviceName'] -status_id $Snipe.DefStatusID -model_id $Model.id -serial $DataHashTable['SerialNumber'] -asset_tag $DataHashTable['SerialNumber'] -customfields $CustomValues;
+        WriteLog -Log "Past creating new snipe asset";
         WriteLog -Log "[SnipeIT] Created a new Asset in SnipeIT.";
     } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to Create new Asset." -Data $_; }
 } ElseIf ($SnipeAsset.Count -gt 1) {
