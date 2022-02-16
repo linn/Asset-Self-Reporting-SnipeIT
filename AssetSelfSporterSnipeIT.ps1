@@ -592,6 +592,9 @@ WriteLog -Log "Checking in to SnipeIT...";
 WriteLog -Log "About to check for asset";
 $SnipeAsset = Get-SnipeItAsset -asset_serial $DataHashTable['SerialNumber'];
 WriteLog -Log "Done checking for asset";
+## These custom fields have to be created and then allocated to a fieldset that is applied to the model.
+## Create the custom field within SnipeIT and then ensure the field name is correct in the script below.
+## The number on the end of the field name is simply the unique ID for the field, created at creation time
 $CustomValues.Add('purchase_date', $DataHashTable['Purchased']);
 $CustomValues.Add('warranty_months', $DataHashTable['WarrantyMonths']);
 $CustomValues.Add('_snipeit_mac_address_1', $DataHashTable['MacAddress']);
