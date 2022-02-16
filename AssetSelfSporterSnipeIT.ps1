@@ -609,6 +609,7 @@ $CustomValues.Add('_snipeit_external_media_17', $DataHashTable['RemovableMedia']
 $CustomValues.Add('_snipeit_licensed_software_18', $DataHashTable['LicensedSoftware']);
 $CustomValues.Add('_snipeit_remote_desktop_users_19', $DataHashTable['RemoteUsers']);
 If (!$SnipeAsset) {
+    ## If no asset exists, go hunting for data and create one
     Try {
         Try {
             WriteLog -Log "Finding Manufacturer in SnipeIT";
@@ -643,11 +644,13 @@ If (!$SnipeAsset) {
         } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to obtain Model ID." -Data $_; }
         WriteLog -Log "About to create new snipe asset";
         ## FIXME - The StatusID needs to change depending on the state of the machine
-        $SnipeAsset = New-SnipeItAsset -name $DataHashTable['DeviceName'] -status_id $Snipe.DefStatusID -model_id $Model.id -serial $DataHashTable['SerialNumber'] -asset_tag $DataHashTable['SerialNumber'] -customfields $CustomValues;
+        # $SnipeAsset = New-SnipeItAsset -name $DataHashTable['DeviceName'] -status_id $Snipe.DefStatusID -model_id $Model.id -serial $DataHashTable['SerialNumber'] -asset_tag $DataHashTable['SerialNumber'] -customfields $CustomValues;
+        $SnipeAsset = New-SnipeItAsset -name $DataHashTable['DeviceName'] -status_id $Snipe.DefStatusID -model_id $Model.id -serial $DataHashTable['SerialNumber'] -asset_tag $DataHashTable['DeviceName'] -customfields $CustomValues;
         WriteLog -Log "Past creating new snipe asset";
         WriteLog -Log "[SnipeIT] Created a new Asset in SnipeIT.";
     } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to Create new Asset." -Data $_; }
 } ElseIf ($SnipeAsset.Count -gt 1) {
+    ## If there are multiple assets returned...
     WriteLog -Log "[ERROR] Multiple Assets with Identical Serial Numbers Found in SnipeIT.";
     EmailAlert -Subject "Multiple Assets with Identical Serial Numbers Found." -Body "Asset Name: $($DeviceName)`n`n$($SnipeAsset | Format-List | Out-String)";
 } Else {
@@ -790,7 +793,7 @@ If (!$SnipeAsset) {
     Try {
         $Model = Get-SnipeItModel -search $DataHashTable['Model'];
         $ManufacturerID = $SnipeAsset.manufacturer.id;
-        $UpdatedAsset = Set-SnipeItAsset -name $DataHashTable['DeviceName'] -id $SnipeAsset.id -status_id $Snipe.DefStatusID -customfields $CustomValues;
+        $UpdatedAsset = Set-SnipeItAsset -name $DataHashTable['DeviceName'] -id $SnipeAsset.id -status_id $Snipe.DefStatusID -asset_tag $DataHashTable['DeviceName'] -customfields $CustomValues;
         WriteLog -Log "[SnipeIT] Updated an Asset in SnipeIT." -Data $UpdatedAsset;
         $SnipeAsset = $UpdatedAsset;
     } Catch { WriteLog -Log "[ERROR] Unable to Update SnipeIT Asset." -Data $_; }
