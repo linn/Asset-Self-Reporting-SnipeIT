@@ -32,8 +32,10 @@ $DellApi =@{
 $Snipe = @{
     Url = $snipeiturl;
     Token = $snipeitapi;
-    DefStatusID = 8;
-    WorkstationCatID = 12;
+    ## Defined at /statuslabels
+    DefStatusID = 4;
+    ## Defined at /categories
+    WorkstationCatID = 3;
     ServerCatID = 8;
     FieldSetID = 3;
 }
@@ -609,7 +611,8 @@ If (!$SnipeAsset) {
                 $Model = New-SnipeItModel -name $DataHashTable['Model'] -manufacturer_id $ManufacturerID -fieldset_id $Snipe.FieldSetID -category_id $ModelCatID;
             }
         } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to obtain Model ID." -Data $_; }
-        $SnipeAsset = New-SnipeItAsset -name $DataHashTable['DeviceName'] -status_id 8 -model_id $Model.id -serial $DataHashTable['SerialNumber'] -asset_tag $DataHashTable['SerialNumber'] -customfields $CustomValues;
+        ## FIXME - The StatusID needs to change depending on the state of the machine
+        $SnipeAsset = New-SnipeItAsset -name $DataHashTable['DeviceName'] -status_id $Snipe.DefStatusID -model_id $Model.id -serial $DataHashTable['SerialNumber'] -asset_tag $DataHashTable['SerialNumber'] -customfields $CustomValues;
         WriteLog -Log "[SnipeIT] Created a new Asset in SnipeIT.";
     } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to Create new Asset." -Data $_; }
 } ElseIf ($SnipeAsset.Count -gt 1) {
