@@ -8,11 +8,12 @@
 
 # This script creates directories a Directory Structure for Year and Month.
 $LogFileDirectory = $logfiles;
+If (!(Test-Path -Path "$($LogFileDirectory)")) { New-Item -ItemType Directory -Path "$($LogFileDirectory)"; }
 
 # Creates and Stores Data in an Excel Spreadsheet
 # FIXME # This doesn't work well with empty serial numbers
 $CsvFilePath = $records;
-New-Item -Path $CsvFilePath -ItemType Directory
+If (!(Test-Path -Path "$($CsvFilePath)")) { New-Item -ItemType Directory -Path "$($CsvFilePath)"; }
 
 # Send Emails when Critical Data has seen an Update or when new Assets report
 $EmailParams = @{
@@ -59,54 +60,10 @@ $DailyPowerOnList = @(
 
 );
 
-
-#####################################################################################################################################
-# Static Variables 
-#####################################################################################################################################
-Clear-Host;
-
-Remove-Variable -Name DataHashTable -ErrorAction 'SilentlyContinue';
-Remove-Variable -Name DataObject -ErrorAction 'SilentlyContinue';
-Remove-Variable -Name Record -ErrorAction 'SilentlyContinue';
-Remove-Variable -Name StataSerial  -ErrorAction 'SilentlyContinue';
-
-$Today = Get-Date -UFormat "%d-%b-%Y";
-$Year = Get-Date -Format yyyy;
-$Month = Get-Date -UFormat "%m-%B";
-$LogFileDate = Get-Date -UFormat "%d-%b-%Y";
-
-$DeviceName = hostname;
-
-[HashTable]$DataHashTable = @{};
-$Win32_BIOS = Get-WMIObject -Class Win32_BIOS;
-
-$DataHashTable.Add('SerialNumber', $Win32_BIOS.SerialNumber);
-$Win32_ComputerSystem = Get-WmiObject -Class Win32_ComputerSystem;
-$CsvFile = "$CsvFilePath\$($Win32_BIOS.SerialNumber).csv";
-
-$LogFileDirectory = "$LogFileDirectory\$Year\$Month\$($Win32_BIOS.SerialNumber)-$($DeviceName)";
-$LogFile = "$LogFileDirectory\$($Win32_BIOS.SerialNumber)_$($DeviceName)_$($LogFileDate)_SelfReport.log";
-
-$StringHasher = [System.Security.Cryptography.HashAlgorithm]::Create('sha256');
-
-Remove-Item C:\tech -Recurse -Force -ErrorAction SilentlyContinue;
-
-$EmailParams.Add('Subject', '');
-$EmailParams.Add('Body', '');
-
-$CustomValues = @{};
-
-
 ###############################################################################################################################################################################################
 # Functions
 #####################################################################################################################################
 
-
-If (!(Test-Path -Path "$($LogFileDirectory)")) { New-Item -ItemType Directory -Path "$($LogFileDirectory)"; }
-If (!(Test-Path -Path $LogFile -PathType Leaf)) {
-    New-Item -ItemType "file" -Path "$LogFile" -Force;
-    Add-Content $LogFile "[$Date] Log File Created.";
-}
 
 Function WriteLog {
 	param( [String] $Log, [Object[]] $Data )
@@ -145,6 +102,57 @@ Function GetHRSize {
     }
 }
 
+#####################################################################################################################################
+# Static Variables 
+#####################################################################################################################################
+Clear-Host;
+
+Remove-Variable -Name DataHashTable -ErrorAction 'SilentlyContinue';
+Remove-Variable -Name DataObject -ErrorAction 'SilentlyContinue';
+Remove-Variable -Name Record -ErrorAction 'SilentlyContinue';
+Remove-Variable -Name StataSerial  -ErrorAction 'SilentlyContinue';
+
+$Today = Get-Date -UFormat "%d-%b-%Y";
+$Year = Get-Date -Format yyyy;
+$Month = Get-Date -UFormat "%m-%B";
+$LogFileDate = Get-Date -UFormat "%d-%b-%Y";
+
+$DeviceName = hostname;
+
+[HashTable]$DataHashTable = @{};
+$Win32_BIOS = Get-WMIObject -Class Win32_BIOS;
+
+If (-NOT ($Win32_BIOS.SerialNumber)) { 
+    EmailAlert -Subject "No BIOS Serial Number" -Body ($Win32_BIOS | Out-String); 
+    $DataHashTable.Add('SerialNumber', $DeviceName);
+} else {
+    $DataHashTable.Add('SerialNumber', $Win32_BIOS.SerialNumber);
+}
+
+
+$Win32_ComputerSystem = Get-WmiObject -Class Win32_ComputerSystem;
+$CsvFile = "$CsvFilePath\$($DataHashTable['SerialNumber']).csv";
+
+# $DataHashTable['SerialNumber']
+
+$LogFileDirectory = "$LogFileDirectory\$Year\$Month\$($DataHashTable['SerialNumber'])-$($DeviceName)";
+$LogFile = "$LogFileDirectory\$($DataHashTable['SerialNumber'])_$($DeviceName)_$($LogFileDate)_SelfReport.log";
+
+If (!(Test-Path -Path $LogFile -PathType Leaf)) {
+    Write-Host "Creating log file path"
+    New-Item -ItemType "file" -Path "$LogFile" -Force;
+    Add-Content $LogFile "[$Date] Log File Created.";
+}
+
+
+$StringHasher = [System.Security.Cryptography.HashAlgorithm]::Create('sha256');
+
+Remove-Item C:\tech -Recurse -Force -ErrorAction SilentlyContinue;
+
+# $EmailParams.Add('Subject', '');
+# $EmailParams.Add('Body', '');
+
+$CustomValues = @{};
 
 #####################################################################################################################################
 # Requirements 
@@ -155,9 +163,11 @@ If (-NOT (Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction SilentlyCo
     Install-PackageProvider NuGet -Confirm:$false -Force:$true;
 }
 
+# FIXME - only run DellBIOSProvider on Dell machines
 If ($Win32_ComputerSystem.Model -eq "Virtual Machine") {
     $RequiredModules = "ImportExcel", "SnipeitPS";
-} Else { $RequiredModules = "ImportExcel", "SnipeitPS", "DellBIOSProvider", "ActiveDirectory"; }
+# } Else { $RequiredModules = "ImportExcel", "SnipeitPS", "DellBIOSProvider", "ActiveDirectory"; }
+} Else { $RequiredModules = "ImportExcel", "SnipeitPS", "ActiveDirectory"; }
 
 $RequiredModules | ForEach-Object {
     Try {
@@ -223,7 +233,6 @@ If ($DataHashTable['OS'] -Contains "Server") { $ModelCatID = $Snipe.ServerCatID;
 #################################f###################################################################################################
 WriteLog -Log "Gathering Bios Information...";
 
-If (-NOT ($Win32_BIOS.SerialNumber)) { EmailAlert -Subject "No BIOS Serial Number" -Body ($Win32_BIOS | Out-String); }
 Try {
     If ($DataHashTable['Manufacturer'] -eq 'Dell' -AND (Get-Item -Path "DellSmbios:\" -ErrorAction SilentlyContinue)) {
         Function Set-DellBiosSetting {
@@ -524,6 +533,9 @@ If (Test-Path -Path $CsvFile -PathType Leaf) {
 #####################################################################################################################################
 WriteLog -Log "Checking Dell Warranty Information...";
 
+WriteLog -Log "Checking Dell API for Machine Model" + $DataHashTable['Model'];
+WriteLog -Log "Checking Dell API for Machine Manufacturer" + $DataHashTable['Manufacturer'];
+
 If ($DataHashTable['Model'] -ne "Virtual Machine") {
     If (!$Record -OR !$Record.Purchased -OR !$Record.WarrantyMonths) {
         WriteLog -Log "Updating Purchase and Warranty Dates..."
@@ -570,14 +582,16 @@ If ($DataHashTable['Model'] -ne "Virtual Machine") {
         $DataHashTable.Add('WarrantyExpiration', $Record.WarrantyExpiration);
         $DataHashTable.Add('Age', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $Today).Days / 365), 1));
     }
-    $DataHashTable.Add('WarrantyMonths', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $DataHashTable['WarrantyExpiration']).Days) / 30.33));
+    # $DataHashTable.Add('WarrantyMonths', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $DataHashTable['WarrantyExpiration']).Days) / 30.33));
 }
 
 #####################################################################################################################################
 # Update SnipeIT 
 #####################################################################################################################################
 WriteLog -Log "Checking in to SnipeIT...";
+WriteLog -Log "About to check for asset";
 $SnipeAsset = Get-SnipeItAsset -asset_serial $DataHashTable['SerialNumber'];
+WriteLog -Log "Done checking for asset";
 $CustomValues.Add('purchase_date', $DataHashTable['Purchased']);
 $CustomValues.Add('warranty_months', $DataHashTable['WarrantyMonths']);
 $CustomValues.Add('_snipeit_mac_address_1', $DataHashTable['MacAddress']);
