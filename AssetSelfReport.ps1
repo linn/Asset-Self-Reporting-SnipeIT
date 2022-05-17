@@ -408,6 +408,7 @@ Get-NetAdapter | Where-Object { $_.Name -NotLike "*bluetooth*" } | ForEach-Objec
     }
 }
 $MacAddress = $MacAddress -join "`n";
+$MacAddress = $MacAddress.Split(" ")[0];
 $IpAddress = $IpAddress -join "`n";
 $NetworkAdapters = $NetworkAdapters -join "`n";
 $DataHashTable.Add('IpAddress', $IpAddress);
@@ -826,6 +827,7 @@ If ($NextAuditDate.Month -ne 1) {
     $CustomValues.Add('next_audit_date', ($NextAuditDate | Get-Date -UFormat "%Y-%m-%d"));
 }
 If (!$SnipeAsset) {
+    ## If no asset exists, go hunting for data and create one
     Try {
         Try {
             $Manufacturer = Get-SnipeItManufacturer -search $DataHashTable['Manufacturer'];
