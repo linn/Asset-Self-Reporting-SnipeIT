@@ -718,57 +718,59 @@ If (Test-Path -Path $CsvFile -PathType Leaf) {
 ########################################################################################################################################################################################################
 # Fetch Dell Warranty Data
 ########################################################################################################################################################################################################
-#WriteLog -Log "Checking Dell Warranty Information...";
-$DellUri = "https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements";
-If ($DataHashTable['Model'] -ne "Virtual Machine") {
-    If (!$Record -OR !$Record.Purchased -OR !$Record.WarrantyMonths) {
-        WriteLog -Log "Updating Purchase and Warranty Dates..."
-        If ($DataHashTable['Manufacturer'] -eq "Dell") {
-            WriteLog -Log "[Dell Warranty] No Dell Information in the Record. Fetching Purchase Date and Warranty Date.";
-            Try {
-                $AuthURI = "https://apigtwb2c.us.dell.com/auth/oauth/v2/token";
-                $OAuth = "$($DellApi.Key)`:$($DellApi.Secret)";
-                $Bytes = [System.Text.Encoding]::ASCII.GetBytes($OAuth);
-                $EncodedOAuth = [Convert]::ToBase64String($Bytes);
-                $DellTokenHeaders = @{ };
-                $DellTokenHeaders.Add("authorization", "Basic $EncodedOAuth");
-                $Authbody = 'grant_type=client_credentials';
-                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
-                $AuthResult = Invoke-RESTMethod -Method Post -Uri $AuthURI -Body $AuthBody -Headers $DellTokenHeaders;
-                $Token = $AuthResult.access_token;
-                $DellApiHeaders = @{ 
-                    "Accept" = "application/json"
-                    "Authorization" = "Bearer $($Token)"
-                };
-                $DellApiParams = @{ };
-                $DellApiParams = @{servicetags = $DataHashTable['SerialNumber']; Method = "GET"};
-                $DellApiResponse = Invoke-RestMethod -Uri $DellUri -Headers $DellApiHeaders -Body $DellApiParams -Method Get -ContentType "application/json" -ea 0;
-                $DellApiResponse = $DellApiResponse | ConvertTo-Json | ConvertFrom-Json;
-                If ($DellApiResponse) {
-                    $DataHashTable.Add('WarrantyExpiration', (($DellApiResponse.entitlements | Select-Object -Last 1).endDate | Get-Date));
-                    $DataHashTable.Add('Purchased', ($DellApiResponse.shipDate | Get-Date -UFormat "%Y-%m-%d"));
-                    $DataHashTable.Add('Age', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $Today).Days / 365), 1));
-                    If ($DellApiResponse.ProductID -Like '*desktop*') { 
-                        $DellApiResponse.ProductID = 'Desktop';
-                    } ElseIf ($DellApiResponse.ProductID -Like '*laptop*') { 
-                        $DellApiResponse.ProductID = 'Laptop';
-                    } ElseIf ($DellApiResponse.ProductID -Like '*server*') { 
-                        $DellApiResponse.ProductID = 'Server';
-                    }
-                    If ((-NOT ($DataHashTable['Purchased'])) -OR (-NOT ($DataHashTable['WarrantyExpiration']))) {
-                        WriteLog -Log "[ERROR] Potential problem with Dell Warranty Fetch." -Data $DellApiResponse;
-            }}} Catch {
-                WriteLog -Log "[ERROR] Error Obtaining Dell Warranty Information." -Data $_;
-            } 
-        }
-    } Else {
-        $DataHashTable.Add('Purchased', ($Record.Purchased | Get-Date -UFormat "%Y-%m-%d"));
-        $DataHashTable.Add('WarrantyExpiration', $Record.WarrantyExpiration);
-        $DataHashTable.Add('Age', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $Today).Days / 365), 1));
-    }
-    $DataHashTable.Add('WarrantyMonths', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $DataHashTable['WarrantyExpiration']).Days) / 30.33));
-}
+If ($UseDell -eq $true) {
 
+    #WriteLog -Log "Checking Dell Warranty Information...";
+    $DellUri = "https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements";
+    If ($DataHashTable['Model'] -ne "Virtual Machine") {
+        If (!$Record -OR !$Record.Purchased -OR !$Record.WarrantyMonths) {
+            WriteLog -Log "Updating Purchase and Warranty Dates..."
+            If ($DataHashTable['Manufacturer'] -eq "Dell") {
+                WriteLog -Log "[Dell Warranty] No Dell Information in the Record. Fetching Purchase Date and Warranty Date.";
+                Try {
+                    $AuthURI = "https://apigtwb2c.us.dell.com/auth/oauth/v2/token";
+                    $OAuth = "$($DellApi.Key)`:$($DellApi.Secret)";
+                    $Bytes = [System.Text.Encoding]::ASCII.GetBytes($OAuth);
+                    $EncodedOAuth = [Convert]::ToBase64String($Bytes);
+                    $DellTokenHeaders = @{ };
+                    $DellTokenHeaders.Add("authorization", "Basic $EncodedOAuth");
+                    $Authbody = 'grant_type=client_credentials';
+                    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
+                    $AuthResult = Invoke-RESTMethod -Method Post -Uri $AuthURI -Body $AuthBody -Headers $DellTokenHeaders;
+                    $Token = $AuthResult.access_token;
+                    $DellApiHeaders = @{ 
+                        "Accept" = "application/json"
+                        "Authorization" = "Bearer $($Token)"
+                    };
+                    $DellApiParams = @{ };
+                    $DellApiParams = @{servicetags = $DataHashTable['SerialNumber']; Method = "GET"};
+                    $DellApiResponse = Invoke-RestMethod -Uri $DellUri -Headers $DellApiHeaders -Body $DellApiParams -Method Get -ContentType "application/json" -ea 0;
+                    $DellApiResponse = $DellApiResponse | ConvertTo-Json | ConvertFrom-Json;
+                    If ($DellApiResponse) {
+                        $DataHashTable.Add('WarrantyExpiration', (($DellApiResponse.entitlements | Select-Object -Last 1).endDate | Get-Date));
+                        $DataHashTable.Add('Purchased', ($DellApiResponse.shipDate | Get-Date -UFormat "%Y-%m-%d"));
+                        $DataHashTable.Add('Age', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $Today).Days / 365), 1));
+                        If ($DellApiResponse.ProductID -Like '*desktop*') { 
+                            $DellApiResponse.ProductID = 'Desktop';
+                        } ElseIf ($DellApiResponse.ProductID -Like '*laptop*') { 
+                            $DellApiResponse.ProductID = 'Laptop';
+                        } ElseIf ($DellApiResponse.ProductID -Like '*server*') { 
+                            $DellApiResponse.ProductID = 'Server';
+                        }
+                        If ((-NOT ($DataHashTable['Purchased'])) -OR (-NOT ($DataHashTable['WarrantyExpiration']))) {
+                            WriteLog -Log "[ERROR] Potential problem with Dell Warranty Fetch." -Data $DellApiResponse;
+                }}} Catch {
+                    WriteLog -Log "[ERROR] Error Obtaining Dell Warranty Information." -Data $_;
+                } 
+            }
+        } Else {
+            $DataHashTable.Add('Purchased', ($Record.Purchased | Get-Date -UFormat "%Y-%m-%d"));
+            $DataHashTable.Add('WarrantyExpiration', $Record.WarrantyExpiration);
+            $DataHashTable.Add('Age', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $Today).Days / 365), 1));
+        }
+        $DataHashTable.Add('WarrantyMonths', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $DataHashTable['WarrantyExpiration']).Days) / 30.33));
+    }
+}
 
 ########################################################################################################################################################################################################
 # Update SnipeIT 
