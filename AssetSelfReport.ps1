@@ -141,7 +141,15 @@ If ($DeviceName -eq 'EPS-102D-PC01') {
 ########################################################################################################################################################################################################
 # Static Variables 
 ########################################################################################################################################################################################################
-$DataHashTable.Add('SerialNumber', $SerialNumber);
+#$DataHashTable.Add('SerialNumber', $SerialNumber);
+
+If (-NOT ($Win32_BIOS.SerialNumber)) { 
+    # EmailAlert -Subject "No BIOS Serial Number" -Body ($Win32_BIOS | Out-String); 
+    $DataHashTable.Add('SerialNumber', $DeviceName);
+} else {
+    $DataHashTable.Add('SerialNumber', $Win32_BIOS.SerialNumber);
+}
+
 $Win32_ComputerSystem = Get-WmiObject -Class Win32_ComputerSystem;
 $CsvFile = "$RecordFileDir\$($SerialNumber).csv";
 
@@ -786,11 +794,15 @@ If ($SnipeAsset.StatusCode -eq 'InternalServerError') {
         Exit 0;
     }
 }
+## These custom fields have to be created and then allocated to a fieldset that is applied to the model.
+## Create the custom field within SnipeIT and then ensure the field name is correct in the script below.
+## The number on the end of the field name is simply the unique ID for the field, created at creation time
 $CustomValues.Add('purchase_date', $DataHashTable['Purchased']);
 $CustomValues.Add('warranty_months', $DataHashTable['WarrantyMonths']);
 $CustomValues.Add('_snipeit_mac_address_1', $DataHashTable['MacAddress']);
 $CustomValues.Add('_snipeit_cpu_2', $DataHashTable['CPU']);
 $CustomValues.Add('_snipeit_ram_3', $DataHashTable['RAM']);
+$CustomValues.Add('_snipeit_fqdn_4', [System.Net.Dns]::GetHostEntry($DataHashTable['IpAddress']).HostName);
 $CustomValues.Add('_snipeit_operating_system_5', $DataHashTable['OS']);
 $CustomValues.Add('_snipeit_ip_address_9', $DataHashTable['IpAddress']);
 $CustomValues.Add('_snipeit_bios_11', $DataHashTable['Bios']);
@@ -801,7 +813,9 @@ $CustomValues.Add('_snipeit_internal_media_16', $DataHashTable['InternalMedia'])
 $CustomValues.Add('_snipeit_external_media_17', $DataHashTable['RemovableMedia']);
 $CustomValues.Add('_snipeit_installed_software_18', $DataHashTable['InstalledSoftware']);
 $CustomValues.Add('_snipeit_remote_desktop_users_19', $DataHashTable['RemoteUsers']);
-$CustomValues.Add('_snipeit_applied_updates_22', $DataHashTable['AppliedUpdates']);
+$CustomValues.Add('_snipeit_ram_installed_20', $DataHashTable['RAM_Installed']);
+$CustomValues.Add('_snipeit_webcam_22', $DataHashTable['Webcam']);
+$CustomValues.Add('_snipeit_applied_updates_23', $DataHashTable['AppliedUpdates']);
 $CustomValues.Add('_snipeit_network_adapters_24', $DataHashTable['NetworkAdapters']);
 $CustomValues.Add('_snipeit_age_25', $DataHashTable['Age']);
 $NextAuditDate = Get-Date;
