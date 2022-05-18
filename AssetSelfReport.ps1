@@ -847,7 +847,7 @@ If (!$SnipeAsset) {
             If ($Model.count -eq 0) {
                 If ($DataHashTable['OS'] -Contains "Server") { $ModelCatID = $Snipe.ServerCatID; } 
                 Else { $ModelCatID = $Snipe.WorkstationCatID; }
-                WriteLog "[SnipeIT] Creating a new model in Snipe-IT";
+                WriteLog -Log "[SnipeIT] Creating a new model in Snipe-IT";
                 $Model = New-SnipeItModel -name $DataHashTable['Model'] -manufacturer_id $ManufacturerID -fieldset_id $Snipe.FieldSetID -category_id $ModelCatID;
             }
         } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to obtain Model ID." -Data $_; }
