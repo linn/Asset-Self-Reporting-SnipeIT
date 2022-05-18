@@ -835,14 +835,19 @@ If (!$SnipeAsset) {
             $ManufacturerID = $Manufacturer.id;
         } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to obtain Manufacturer ID." -Data $_; }
         Try {
+            $String = "[SnipeIT] Checking for model " + $($DataHashTable['Model']);
+            WriteLog -Log $String;
             $Model = Get-SnipeItModel -all | Where-Object { $_.name -eq "$($DataHashTable['Model'])" };
             $ModelData = $Model.notes -replace "&quot;",'"' | ConvertFrom-Json;
+            $String = "[SnipeIT] Retrieved " + $Model + " from SnipeIT";
+            WriteLog -Log $String;
             If ($ModelData.LatestBios -gt $DataHashTable['Bios']) {
                 ##########################################
             }
-            If ($Model.total -eq 0) {
+            If ($Model.count -eq 0) {
                 If ($DataHashTable['OS'] -Contains "Server") { $ModelCatID = $Snipe.ServerCatID; } 
                 Else { $ModelCatID = $Snipe.WorkstationCatID; }
+                WriteLog "[SnipeIT] Creating a new model in Snipe-IT";
                 $Model = New-SnipeItModel -name $DataHashTable['Model'] -manufacturer_id $ManufacturerID -fieldset_id $Snipe.FieldSetID -category_id $ModelCatID;
             }
         } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to obtain Model ID." -Data $_; }
