@@ -53,6 +53,8 @@ $DeviceName = hostname;
 $Win32_BIOS = Get-WMIObject -Class Win32_BIOS;
 $SerialNumber = $Win32_BIOS.SerialNumber;
 $RandomNumber = Get-Random -Minimum 0 -Maximum 300;
+$SystemInformation = Get-WmiObject -Namespace root\wmi -Class MS_SystemInformation;
+$SoftwareLicensingServiceInfo = Get-WmiObject -query 'select * from SoftwareLicensingService';
 
 # List of default, erroneous, and redundant apps that may be installed that we do not need listed under "installed software".
 # The script will still notify you if install status changes for these, but will not list these apps in SnipeIT.
@@ -164,6 +166,8 @@ $EmailParams.Add('Subject','');
 $EmailParams.Add('Body','');
 $CustomValues = @{};
 
+$UUID = (Get-WmiObject -Class Win32_ComputerSystemProduct).UUID
+$DataHashTable.Add('UUID', $UUID);
 
 ########################################################################################################################################################################################################
 # Functions
@@ -282,7 +286,7 @@ $DataHashTable.Add('LastReportedUnix', ([Math]::Round((Get-Date -UFormat %s),0))
 $DataHashTable.Add('Model', $Win32_ComputerSystem.Model);
 $DataHashTable.Add('Manufacturer', "$($Win32_ComputerSystem.Manufacturer -replace " Inc.", '')");
 $DataHashTable.Add('Bios', $Win32_BIOS.SMBIOSBIOSVersion);
-
+$DataHashTable.Add('SKU', $SystemInformation.SystemSKU);
 
 ########################################################################################################################################################################################################
 # Operating System Information
@@ -291,6 +295,9 @@ $DataHashTable.Add('Bios', $Win32_BIOS.SMBIOSBIOSVersion);
 $Win32_OperatingSystem = Get-WmiObject -Class Win32_OperatingSystem;
 $DataHashTable.Add('OS', ($Win32_OperatingSystem.Name).Split("|")[0]);
 $DataHashTable.Add('Build', $Win32_OperatingSystem.Version);
+$Win_Version = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion
+$DataHashTable.Add('WindowsVersion', $Win_Version);
+$DataHashTable.Add('BIOSWindowsLicenseKey', $SoftwareLicensingServiceInfo.OA3xOriginalProductKey);
 If ($DataHashTable['OS'] -Contains "Server") { $ModelCatID = $Snipe.ServerCatID; }
 
 
@@ -428,7 +435,12 @@ $LocalAdministrators = Get-LocalGroupMember -Group "Administrators";
 $DataHashTable.Add('LocalAdmins', ($LocalAdministrators).Name -join "`n");
 $RemoteDesktopUsers = Get-LocalGroupMember -Group "Remote Desktop Users";
 $DataHashTable.Add('RemoteUsers', ($RemoteDesktopUsers).Name -join "`n");
+# $LastUser = Get-WmiObject Win32_NetworkLoginProfile | Where{$_.LastLogon} | Sort LastLogon -Descending | Select-Object Name -first 1;
+# Doesn't seem to work # $LastUser = (Get-CimInstance -ClassName Win32_ComputerSystem).Username
+# Doesn't report anything when running as SYSTEM # $LastUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$LastUser = Get-ChildItem "c:\Users" | Sort-Object LastWriteTime -Descending | Select-Object Name, LastWriteTime -first 1
 
+$DataHashTable.Add('LastUser', ($LastUser).Name);
 
 ########################################################################################################################################################################################################
 # Uptime
@@ -819,6 +831,13 @@ $CustomValues.Add('_snipeit_webcam_22', $DataHashTable['Webcam']);
 $CustomValues.Add('_snipeit_applied_updates_23', $DataHashTable['AppliedUpdates']);
 $CustomValues.Add('_snipeit_network_adapters_24', $DataHashTable['NetworkAdapters']);
 $CustomValues.Add('_snipeit_age_25', $DataHashTable['Age']);
+$CustomValues.Add('_snipeit_last_logged_in_user_26', $DataHashTable['LastUser']);
+$CustomValues.Add('_snipeit_operating_system_build_6', $DataHashTable['Build']);
+$CustomValues.Add('_snipeit_windows_version_10', $DataHashTable['WindowsVersion']);
+$CustomValues.Add('_snipeit_sku_7', $DataHashTable['SKU']);
+$CustomValues.Add('_snipeit_uuid_35', $DataHashTable['UUID']);
+$CustomValues.Add('_snipeit_bios_windows_license_key_8', 
+$DataHashTable['BIOSWindowsLicenseKey']);
 $NextAuditDate = Get-Date;
 If ($NextAuditDate.Month -ne 1) {
     $NextAuditDate = New-Object DateTime(($NextAuditDate.Year+1), 1, [DateTime]::DaysInMonth($NextAuditDate.Year, $NextAuditDate.Month))
@@ -851,7 +870,7 @@ If (!$SnipeAsset) {
                 $Model = New-SnipeItModel -name $DataHashTable['Model'] -manufacturer_id $ManufacturerID -fieldset_id $Snipe.FieldSetID -category_id $ModelCatID;
             }
         } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to obtain Model ID." -Data $_; }
-        $SnipeAsset = New-SnipeItAsset -name $DataHashTable['DeviceName'] -status_id 5 -model_id $Model.id -serial $DataHashTable['SerialNumber'] -asset_tag $DataHashTable['SerialNumber'] -customfields $CustomValues;
+        $SnipeAsset = New-SnipeItAsset -name $DataHashTable['DeviceName'] -status_id $Snipe.DefStatusID -model_id $Model.id -serial $DataHashTable['SerialNumber'] -asset_tag $DataHashTable['SerialNumber'] -customfields $CustomValues;
         WriteLog -Log "[SnipeIT] Created a new Asset in SnipeIT.";
     } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to Create new Asset." -Data $_; }
 } ElseIf ($SnipeAsset.Count -gt 1) {
