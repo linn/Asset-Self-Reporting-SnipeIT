@@ -447,19 +447,35 @@ $NetworkAdapters = @();
 Get-NetAdapter | Where-Object { $_.Name -NotLike "*bluetooth*" } | ForEach-Object {
     $IfcDesc = $_.InterfaceDescription -replace "\([^\)]+\)",'' -replace '  ',' ';
     $NetworkAdapters += "[$($_.ifIndex)] $($_.LinkSpeed) - $($IfcDesc)";
-    $MacAddress += "$($_.MacAddress -replace '-',':') [$($_.ifIndex)]";
+    $MacAddress += "$($_.MacAddress -replace '-',':')";
     If ($_.Status -eq 'Up') {
         $InterfaceAlias = "$($_.Name)";
-        $IpAddress += "$((Get-NetIpAddress | Where-Object { $_.AddressFamily -Like "IPv4" -and $_.InterfaceAlias -eq $InterfaceAlias; }).IPAddress) [$($_.ifIndex)]";
+        $IpAddress += "$((Get-NetIpAddress | Where-Object { $_.AddressFamily -Like "IPv4" -and $_.InterfaceAlias -eq $InterfaceAlias; }).IPAddress)";
     }
 }
 $MacAddress = $MacAddress -join "`n";
-$MacAddress = $MacAddress.Split(" ")[0];
 $IpAddress = $IpAddress -join "`n";
 $NetworkAdapters = $NetworkAdapters -join "`n";
 $DataHashTable.Add('IpAddress', $IpAddress);
 $DataHashTable.Add('MacAddress', $MacAddress);
 $DataHashTable.Add('NetworkAdapters', $NetworkAdapters);
+
+# Custom MAC Address-based device identification
+$BlackviewMacAddresses = @("68:1D:EF:50:47:02", "8C:EA:12:98:5D:AC");
+$CollectedMacAddresses = $MacAddress -split "`n";
+$MacMatch = $false;
+ForEach ($CollectedMac in $CollectedMacAddresses) {
+    If ($BlackviewMacAddresses -contains $CollectedMac) {
+        $MacMatch = $true;
+        Break;
+    }
+}
+If ($MacMatch) {
+    WriteLog -Log "[LOG] Blackview MP60 MAC Address Detected. Overriding Model, Manufacturer and Serial Number.";
+    $DataHashTable['Model'] = "Blackview MP60";
+    $DataHashTable['Manufacturer'] = "Blackview";
+    $DataHashTable['SerialNumber'] = $DeviceName;  # Use hostname as serial number for Blackview devices
+}
 Switch ((Get-WmiObject -Class Win32_NetworkAdapterConfiguration | Sort-Object -Property Index | Where-Object { $_.IPAddress } | Select-Object -First 1).DHCPEnabled) {
     "True" { $DataHashTable.Add('DHCP', "Enabled"); Break; }
     "False" { $DataHashTable.Add('DHCP', "Disabled"); Break; }
@@ -835,11 +851,13 @@ If ($UseDell -eq $true) {
 ########################################################################################################################################################################################################
 # Update SnipeIT 
 ########################################################################################################################################################################################################
-#WriteLog -Log "Checking in to SnipeIT...";
+WriteLog -Log "Checking in to SnipeIT...";
 Start-Sleep -Seconds $RandomNumber;
 Connect-SnipeitPS -URL $Snipe.Url -apiKey $Snipe.Token;
 $SnipeAsset = Get-SnipeItAsset -asset_serial $DataHashTable['SerialNumber'];
+WriteLog -Log "[DEBUG] Asset lookup result for serial '$($DataHashTable['SerialNumber'])': Count=$($SnipeAsset.Count), StatusCode=$($SnipeAsset.StatusCode)";
 If ($SnipeAsset.StatusCode -eq 'InternalServerError') {
+    WriteLog -Log "[WARN] First asset lookup failed with InternalServerError, retrying...";
     $SnipeAsset = Get-SnipeItAsset -asset_serial $DataHashTable['SerialNumber'];
     If ($SnipeAsset.StatusCode -eq 'InternalServerError') {
         EmailAlert -Subject "Error searching SnipeIT" -Body "(Duplicate Check)`n$($SnipeAsset | Format-List | Out-String)";
@@ -857,10 +875,25 @@ Switch ($true) {
     default { }  # Do nothing if 'Purchased' is null or empty
 }
 $CustomValues.Add('warranty_months', $DataHashTable['WarrantyMonths']);
-$CustomValues.Add('_snipeit_mac_address_1', $DataHashTable['MacAddress']);
+# Use only the first MAC address for SnipeIT field (single MAC address validation)
+$PrimaryMacAddress = ($DataHashTable['MacAddress'] -split "`n" | Where-Object { $_ -ne '' })[0];
+If ($PrimaryMacAddress) {
+    $CustomValues.Add('_snipeit_mac_address_1', $PrimaryMacAddress);
+}
 $CustomValues.Add('_snipeit_cpu_2', $DataHashTable['CPU']);
 $CustomValues.Add('_snipeit_ram_3', $DataHashTable['RAM']);
-$CustomValues.Add('_snipeit_fqdn_4', [System.Net.Dns]::GetHostEntry($DataHashTable['IpAddress']).HostName);
+# Safe DNS lookup using first IP address
+Try {
+    $FirstIpAddress = ($DataHashTable['IpAddress'] -split "`n" | Where-Object { $_ -ne '' })[0];
+    If ($FirstIpAddress) {
+        $FQDN = [System.Net.Dns]::GetHostEntry($FirstIpAddress).HostName;
+    } Else {
+        $FQDN = $DataHashTable['DeviceName'];
+    }
+} Catch {
+    $FQDN = $DataHashTable['DeviceName'];
+}
+$CustomValues.Add('_snipeit_fqdn_4', $FQDN);
 $CustomValues.Add('_snipeit_operating_system_5', $DataHashTable['OS']);
 $CustomValues.Add('_snipeit_ip_address_9', $DataHashTable['IpAddress']);
 $CustomValues.Add('_snipeit_bios_11', $DataHashTable['Bios']);
@@ -885,8 +918,8 @@ $CustomValues.Add('_snipeit_bitlocker_version_36', $DataHashTable['BitLockerVers
 $CustomValues.Add('_snipeit_bitlocker_summary_38', $DataHashTable['BitLockerSummary']);
 $CustomValues.Add('_snipeit_domain_39', $DataHashTable['Domain']);
 $CustomValues.Add('_snipeit_windows_ui_language_40', $DataHashTable['WindowsUILanguage']);
-$CustomValues.Add('_snipeit_bios_windows_license_key_8', 
-$DataHashTable['BIOSWindowsLicenseKey']);
+$CustomValues.Add('_snipeit_bios_windows_license_key_8', $DataHashTable['BIOSWindowsLicenseKey']);
+
 $NextAuditDate = Get-Date;
 If ($NextAuditDate.Month -ne 1) {
     $NextAuditDate = New-Object DateTime(($NextAuditDate.Year+1), 1, [DateTime]::DaysInMonth($NextAuditDate.Year, $NextAuditDate.Month))
@@ -894,10 +927,12 @@ If ($NextAuditDate.Month -ne 1) {
     $NextAuditDate = @((Get-Date -Date $NextAuditDate.AddDays($Diff)),(Get-Date -Date $NextAuditDate.AddDays(- (7-$Diff))))[($Diff -ge 0)];
     $CustomValues.Add('next_audit_date', ($NextAuditDate | Get-Date -UFormat "%Y-%m-%d"));
 }
+
 If (!$SnipeAsset) {
     ## If no asset exists, go hunting for data and create one
     Try {
         Try {
+            WriteLog -Log "[SnipeIT] Checking for manufacturer " + $($DataHashTable['Manufacturer']);
             $Manufacturer = Get-SnipeItManufacturer -search $DataHashTable['Manufacturer'];
             If (!$Manufacturer) { $Manufacturer = New-SnipeItManufacturer -name $DataHashTable['Manufacturer']; }
             $ManufacturerID = $Manufacturer.id;
@@ -906,7 +941,8 @@ If (!$SnipeAsset) {
             $String = "[SnipeIT] Checking for model " + $($DataHashTable['Model']);
             WriteLog -Log $String;
             $Model = Get-SnipeItModel -all | Where-Object { $_.name -eq "$($DataHashTable['Model'])" };
-            $ModelData = $Model.notes -replace "&quot;",'"' | ConvertFrom-Json;
+            $ModelData = $Model.notes -replace "&quot;",'"'
+            # | ConvertFrom-Json;
             $String = "[SnipeIT] Retrieved " + $Model + " from SnipeIT";
             WriteLog -Log $String;
             If ($ModelData.LatestBios -gt $DataHashTable['Bios']) {
@@ -920,7 +956,12 @@ If (!$SnipeAsset) {
             }
         } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to obtain Model ID." -Data $_; }
         $SnipeAsset = New-SnipeItAsset -name $DataHashTable['DeviceName'] -status_id $Snipe.DefStatusID -model_id $Model.id -serial $DataHashTable['SerialNumber'] -asset_tag $DataHashTable['SerialNumber'] -customfields $CustomValues;
-        WriteLog -Log "[SnipeIT] Created a new Asset in SnipeIT.";
+        If ($SnipeAsset -and $SnipeAsset.id) {
+            WriteLog -Log "[SnipeIT] Created a new Asset in SnipeIT with ID: $($SnipeAsset.id)";
+        } Else {
+            WriteLog -Log "[SnipeIT] [ERROR] Asset creation returned invalid result.";
+            WriteLog -Log "[DEBUG] Asset creation result:" -Data $SnipeAsset;
+        }
     } Catch { WriteLog -Log "[SnipeIT] [ERROR] Unable to Create new Asset." -Data $_; }
 } ElseIf ($SnipeAsset.Count -gt 1) {
     WriteLog -Log "[ERROR] Multiple Assets with Identical Serial Numbers Found in SnipeIT.";
@@ -1160,9 +1201,14 @@ If (!$SnipeAsset) {
     }
     # Update Asset
     Try {
-        $UpdatedAsset = Set-SnipeItAsset -name $DataHashTable['DeviceName'] -id $SnipeAsset.id -status_id $Snipe.DefStatusID -customfields $CustomValues;
-        WriteLog -Log "[SnipeIT] Updated an Asset in SnipeIT." -Data $UpdatedAsset;
-        $SnipeAsset = $UpdatedAsset;
+        If ($SnipeAsset -and $SnipeAsset.id) {
+            $UpdatedAsset = Set-SnipeItAsset -name $DataHashTable['DeviceName'] -id $SnipeAsset.id -status_id $Snipe.DefStatusID -customfields $CustomValues;
+            WriteLog -Log "[SnipeIT] Updated an Asset in SnipeIT." -Data $UpdatedAsset;
+            $SnipeAsset = $UpdatedAsset;
+        } Else {
+            WriteLog -Log "[ERROR] Cannot update asset - SnipeAsset or SnipeAsset.id is null/empty.";
+            WriteLog -Log "[DEBUG] SnipeAsset content:" -Data $SnipeAsset;
+        }
     } Catch { WriteLog -Log "[ERROR] Unable to Update SnipeIT Asset." -Data $_; }
 }
 
