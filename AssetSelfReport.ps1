@@ -166,8 +166,47 @@ $EmailParams.Add('Subject','');
 $EmailParams.Add('Body','');
 $CustomValues = @{};
 
+#Get UUID
 $UUID = (Get-WmiObject -Class Win32_ComputerSystemProduct).UUID
 $DataHashTable.Add('UUID', $UUID);
+
+#Get Bitlocker Status
+$BitLockerRaw = Manage-BDE -Status | Out-String
+$BitLockerVersionLine = $BitLockerRaw -split "`r?`n" | Where-Object {$_ -match 'BitLocker Version:'}
+$BitLockerVersion = $BitLockerVersionLine -replace 'BitLocker Version:\s*',''
+$DataHashTable.Add('BitLockerVersion', $BitLockerVersion);
+
+$BitLockerLines = $BitLockerRaw -split "`r?`n" | Where-Object {
+    $_ -match 'Conversion Status:' -or
+    $_ -match 'Percentage Encrypted:' -or
+    $_ -match 'Encryption Method:' -or
+    $_ -match 'Protection Status:'
+}
+$BitLockerBDE = $BitLockerLines -join "`n"
+
+$BitLockerVolRaw = Get-BitLockerVolume | ForEach-Object {
+    $mount = $_.MountPoint
+    $_.KeyProtector | ForEach-Object {
+        "Drive: $mount | KeyProtectorId: $($_.KeyProtectorId) | KeyProtectorType: $($_.KeyProtectorType)"
+    }
+}
+$BitLockerVolume = $BitLockerVolRaw -join "`n"
+$BitLockerSummary = ($BitLockerBDE, $BitLockerVolume) -join "`n"
+$DataHashTable.Add('BitLockerSummary', $BitLockerSummary);
+
+$Domain = (Get-WmiObject -Class Win32_ComputerSystem).Domain;
+$DataHashTable.Add('Domain', " $Domain");
+
+#Get UI Language
+$RegkeyResult = Get-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Nls\Language" -Name "Default"
+
+if ($RegkeyResult.Default -eq "0809") {
+    $UILanguage = "en-GB"
+} elseif ($RegkeyResult.Default -eq "0409") {
+    $UILanguage = "en-US"
+}
+$DataHashTable.Add('WindowsUILanguage', $UILanguage);
+
 
 ########################################################################################################################################################################################################
 # Functions
@@ -810,7 +849,13 @@ If ($SnipeAsset.StatusCode -eq 'InternalServerError') {
 ## These custom fields have to be created and then allocated to a fieldset that is applied to the model.
 ## Create the custom field within SnipeIT and then ensure the field name is correct in the script below.
 ## The number on the end of the field name is simply the unique ID for the field, created at creation time
-$CustomValues.Add('purchase_date', $DataHashTable['Purchased']);
+Switch ($true) {
+    (![string]::IsNullOrEmpty($DataHashTable['Purchased'])) {
+        $CustomValues.Add('purchase_date', $DataHashTable['Purchased'])
+        Break
+    }
+    default { }  # Do nothing if 'Purchased' is null or empty
+}
 $CustomValues.Add('warranty_months', $DataHashTable['WarrantyMonths']);
 $CustomValues.Add('_snipeit_mac_address_1', $DataHashTable['MacAddress']);
 $CustomValues.Add('_snipeit_cpu_2', $DataHashTable['CPU']);
@@ -836,6 +881,10 @@ $CustomValues.Add('_snipeit_operating_system_build_6', $DataHashTable['Build']);
 $CustomValues.Add('_snipeit_windows_version_10', $DataHashTable['WindowsVersion']);
 $CustomValues.Add('_snipeit_sku_7', $DataHashTable['SKU']);
 $CustomValues.Add('_snipeit_uuid_35', $DataHashTable['UUID']);
+$CustomValues.Add('_snipeit_bitlocker_version_36', $DataHashTable['BitLockerVersion']);
+$CustomValues.Add('_snipeit_bitlocker_summary_38', $DataHashTable['BitLockerSummary']);
+$CustomValues.Add('_snipeit_domain_39', $DataHashTable['Domain']);
+$CustomValues.Add('_snipeit_windows_ui_language_40', $DataHashTable['WindowsUILanguage']);
 $CustomValues.Add('_snipeit_bios_windows_license_key_8', 
 $DataHashTable['BIOSWindowsLicenseKey']);
 $NextAuditDate = Get-Date;
