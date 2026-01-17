@@ -211,7 +211,7 @@ $DataHashTable.Add('SecureBootStatus', $SecureBootStatus);
 
 #Get Secure Boot Certificate Expiry Information
 $SecureBootCertInfo = "";
-If ($SecureBootStatus -eq "Enabled" -OR $SecureBootStatus -eq "Disabled") {
+If ($SecureBootStatus -eq "Enabled" -or $SecureBootStatus -eq "Disabled") {
     Try {
         # Export Secure Boot db to temp file
         $TempDbPath = "$env:TEMP\secureboot_db_$($SerialNumber).bin";

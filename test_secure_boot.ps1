@@ -35,7 +35,7 @@ Write-Host ""
 # Test 2: Secure Boot Certificate Expiry
 Write-Host "Test 2: Secure Boot Certificate Expiry" -ForegroundColor Green
 $SecureBootCertInfo = "";
-If ($SecureBootStatus -eq "Enabled" -OR $SecureBootStatus -eq "Disabled") {
+If ($SecureBootStatus -eq "Enabled" -or $SecureBootStatus -eq "Disabled") {
     Try {
         # Export Secure Boot db to temp file
         $TempDbPath = "$env:TEMP\secureboot_db_$($SerialNumber).bin";
