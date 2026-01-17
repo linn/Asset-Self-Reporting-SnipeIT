@@ -5,7 +5,7 @@ Write-Host "=== Testing Secure Boot and BIOS Information Collection ===" -Foregr
 Write-Host ""
 
 # Simulate the Win32_BIOS object that would be available in the main script
-$Win32_BIOS = Get-WmiObject -Class Win32_BIOS
+$Win32_BIOS = Get-CimInstance -ClassName Win32_BIOS
 $SerialNumber = $Win32_BIOS.SerialNumber
 If (!$SerialNumber) { $SerialNumber = "TEST123" }
 
@@ -37,8 +37,9 @@ Write-Host "Test 2: Secure Boot Certificate Expiry" -ForegroundColor Green
 $SecureBootCertInfo = "";
 If ($SecureBootStatus -eq "Enabled" -or $SecureBootStatus -eq "Disabled") {
     Try {
-        # Export Secure Boot db to temp file
-        $TempDbPath = "$env:TEMP\secureboot_db_$($SerialNumber).bin";
+        # Export Secure Boot db to temp file (sanitize serial number for filename)
+        $SanitizedSerial = $SerialNumber -replace '[\\/:*?"<>|]', '_';
+        $TempDbPath = "$env:TEMP\secureboot_db_$($SanitizedSerial).bin";
         $SecureBootDb = Get-SecureBootUEFI -Name db -OutputFilePath $TempDbPath -ErrorAction Stop;
         
         If (Test-Path $TempDbPath) {
@@ -48,11 +49,11 @@ If ($SecureBootStatus -eq "Enabled" -or $SecureBootStatus -eq "Disabled") {
             Write-Host "  Parsing certificate database ($($dbBytes.Length) bytes)..." -ForegroundColor Cyan
             
             # Parse X.509 certificates from the UEFI variable
-            For ($i = 0; $i -lt $dbBytes.Length - 4; $i++) {
+            For ($i = 0; $i -lt $dbBytes.Length - 3; $i++) {
                 If ($dbBytes[$i] -eq 0x30 -and $dbBytes[$i+1] -eq 0x82) {
                     $length = ([int]$dbBytes[$i+2] -shl 8) + [int]$dbBytes[$i+3] + 4;
                     
-                    If (($i + $length) -le $dbBytes.Length) {
+                    If (($i + $length) -le $dbBytes.Length -and $length -gt 4 -and $length -lt 10000) {
                         Try {
                             $certBytes = $dbBytes[$i..($i+$length-1)];
                             $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList @(,$certBytes);
@@ -130,7 +131,8 @@ Write-Host ""
 Write-Host "Test 3: BIOS Release Date" -ForegroundColor Green
 If ($Win32_BIOS.ReleaseDate) {
     Try {
-        $BiosReleaseDate = [System.Management.ManagementDateTimeConverter]::ToDateTime($Win32_BIOS.ReleaseDate);
+        # CIM uses DateTime objects directly, no conversion needed
+        $BiosReleaseDate = $Win32_BIOS.ReleaseDate;
         $BiosReleaseDateFormatted = $BiosReleaseDate.ToString('yyyy-MM-dd');
         Write-Host "  Result: $BiosReleaseDateFormatted" -ForegroundColor Cyan
         

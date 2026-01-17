@@ -213,8 +213,9 @@ $DataHashTable.Add('SecureBootStatus', $SecureBootStatus);
 $SecureBootCertInfo = "";
 If ($SecureBootStatus -eq "Enabled" -or $SecureBootStatus -eq "Disabled") {
     Try {
-        # Export Secure Boot db to temp file
-        $TempDbPath = "$env:TEMP\secureboot_db_$($SerialNumber).bin";
+        # Export Secure Boot db to temp file (sanitize serial number for filename)
+        $SanitizedSerial = $SerialNumber -replace '[\\/:*?"<>|]', '_';
+        $TempDbPath = "$env:TEMP\secureboot_db_$($SanitizedSerial).bin";
         $SecureBootDb = Get-SecureBootUEFI -Name db -OutputFilePath $TempDbPath -ErrorAction Stop;
         
         If (Test-Path $TempDbPath) {
@@ -223,12 +224,13 @@ If ($SecureBootStatus -eq "Enabled" -or $SecureBootStatus -eq "Disabled") {
             
             # Parse X.509 certificates from the UEFI variable
             # X.509 DER format starts with 0x30 0x82
-            For ($i = 0; $i -lt $dbBytes.Length - 4; $i++) {
+            For ($i = 0; $i -lt $dbBytes.Length - 3; $i++) {
                 If ($dbBytes[$i] -eq 0x30 -and $dbBytes[$i+1] -eq 0x82) {
                     # Calculate certificate length from DER encoding
+                    # This handles the most common DER length format (definite length, long form)
                     $length = ([int]$dbBytes[$i+2] -shl 8) + [int]$dbBytes[$i+3] + 4;
                     
-                    If (($i + $length) -le $dbBytes.Length) {
+                    If (($i + $length) -le $dbBytes.Length -and $length -gt 4 -and $length -lt 10000) {
                         Try {
                             $certBytes = $dbBytes[$i..($i+$length-1)];
                             $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList @(,$certBytes);
