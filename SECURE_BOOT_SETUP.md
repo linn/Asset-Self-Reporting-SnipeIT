@@ -47,23 +47,25 @@ The script now collects three additional pieces of information:
 
 To use these new fields, you must create the following custom fields in your Snipe-IT instance:
 
-### Field 41: Secure Boot Status
+**NOTE:** Fields 87, 88, and 89 are used to avoid conflicts with existing fields (41-86 are already in use).
+
+### Field 87: Secure Boot Status
 - **Field Name:** `Secure Boot Status`
-- **DB Field:** `_snipeit_secure_boot_status_41`
+- **DB Field:** `_snipeit_secure_boot_status_87`
 - **Field Type:** Text
 - **Format:** Single Line
 - **Help Text:** Current Secure Boot status (Enabled/Disabled/Not Supported)
 
-### Field 42: Secure Boot Certificate Expiry
+### Field 88: Secure Boot Certificate Expiry
 - **Field Name:** `Secure Boot Certificate Expiry`
-- **DB Field:** `_snipeit_secure_boot_cert_expiry_42`
+- **DB Field:** `_snipeit_secure_boot_cert_expiry_88`
 - **Field Type:** Textarea
 - **Format:** Multi-line text
 - **Help Text:** Secure Boot certificate expiration information with status indicators
 
-### Field 43: BIOS Release Date
+### Field 89: BIOS Release Date
 - **Field Name:** `BIOS Release Date`
-- **DB Field:** `_snipeit_bios_release_date_43`
+- **DB Field:** `_snipeit_bios_release_date_89`
 - **Field Type:** Text or Date
 - **Format:** `YYYY-MM-DD`
 - **Help Text:** Date when the BIOS firmware was released
@@ -74,7 +76,7 @@ To use these new fields, you must create the following custom fields in your Sni
 2. Navigate to **Settings** → **Custom Fields**
 3. Click **Create New** for each field
 4. Fill in the details as specified above
-5. Ensure the field numbers (41, 42, 43) match if you're using sequential numbering
+5. Ensure the field numbers (87, 88, 89) match if you're using sequential numbering
 6. Add these fields to your asset fieldset
 7. Associate the fieldset with your asset models
 

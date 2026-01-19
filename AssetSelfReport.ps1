@@ -1026,9 +1026,9 @@ $CustomValues.Add('_snipeit_bitlocker_summary_38', $DataHashTable['BitLockerSumm
 $CustomValues.Add('_snipeit_domain_39', $DataHashTable['Domain']);
 $CustomValues.Add('_snipeit_windows_ui_language_40', $DataHashTable['WindowsUILanguage']);
 $CustomValues.Add('_snipeit_bios_windows_license_key_8', $DataHashTable['BIOSWindowsLicenseKey']);
-$CustomValues.Add('_snipeit_secure_boot_status_41', $DataHashTable['SecureBootStatus']);
-$CustomValues.Add('_snipeit_secure_boot_cert_expiry_42', $DataHashTable['SecureBootCertExpiry']);
-$CustomValues.Add('_snipeit_bios_release_date_43', $DataHashTable['BiosReleaseDate']);
+$CustomValues.Add('_snipeit_secure_boot_status_87', $DataHashTable['SecureBootStatus']);
+$CustomValues.Add('_snipeit_secure_boot_cert_expiry_88', $DataHashTable['SecureBootCertExpiry']);
+$CustomValues.Add('_snipeit_bios_release_date_89', $DataHashTable['BiosReleaseDate']);
 
 $NextAuditDate = Get-Date;
 If ($NextAuditDate.Month -ne 1) {
