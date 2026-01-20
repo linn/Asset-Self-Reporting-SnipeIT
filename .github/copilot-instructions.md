@@ -64,7 +64,7 @@ pwsh -File ./AssetSelfReport.ps1 -ConfigFile "./config.ps1"
 - Successful execution creates log files in configured directories
 
 ### Configuration File Format
-The `config.ps1` file must be a JSON file (despite .ps1 extension) with the following structure:
+The `config.ps1` file should contain JSON data that will be read and parsed by the script using `ConvertFrom-Json`. Create a plain text file with .ps1 extension containing the following JSON structure:
 ```json
 {
   "EmailParams": {
@@ -168,7 +168,7 @@ Invoke-ScriptAnalyzer -Path ./AssetSelfReport.ps1 -Severity Error,Warning
 4. **Email Alerts:** All alert functions use `EmailAlert` wrapper (Lines 229-233). Modify SMTP settings in config, not code.
 
 ### Testing Changes
-1. **Syntax Check:** Run `pwsh -NoProfile -Syntax ./AssetSelfReport.ps1`
+1. **Syntax Check:** Use the syntax validation from lines 105-107 of this document
 2. **Static Analysis:** Run PSScriptAnalyzer before committing changes
 3. **Dry Run:** Test on a non-production machine with test SnipeIT instance
 4. **Monitor Logs:** Script creates detailed logs at `$LogFileDir\$DateDir\$DeviceName\`
