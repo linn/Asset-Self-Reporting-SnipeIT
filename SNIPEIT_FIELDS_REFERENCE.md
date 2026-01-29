@@ -2,9 +2,9 @@
 
 ## Required Custom Fields for Secure Boot and BIOS Information
 
-Add these three custom fields to your Snipe-IT instance to support the new Secure Boot and BIOS data collection:
+Add these custom fields to your Snipe-IT instance to support Secure Boot, BIOS information, and script version tracking:
 
-**NOTE:** Fields 87, 88, and 89 are used to avoid conflicts with existing custom fields (41-86 are already in use for other purposes like Motherboard, PSU, CPU, RAM, etc.)
+**NOTE:** Fields 87, 88, 89, and 90 are used to avoid conflicts with existing custom fields (41-86 are already in use for other purposes like Motherboard, PSU, CPU, RAM, etc.)
 
 ### Field 87: Secure Boot Status
 ```
@@ -65,6 +65,25 @@ Fieldsets: Computers
 
 ---
 
+### Field 90: Script Version
+```
+Field Name: Script Version
+DB Field: _snipeit_script_version_90
+Field Type: Text
+Format: Single Line Text
+Help Text: Version of the asset collection script that last reported data
+Required: No
+Fieldsets: Computers
+```
+
+**Example Value:**
+- `1.0`
+
+**Version History:**
+- `1.0` - Initial version with version reporting
+
+---
+
 ## How to Add These Fields in Snipe-IT
 
 1. Log in as administrator
@@ -72,12 +91,12 @@ Fieldsets: Computers
 3. Click **Create New**
 4. Fill in the details from above
 5. Save each field
-6. Add all three fields to your "Computers" fieldset (or appropriate fieldset)
+6. Add all fields to your "Computers" fieldset (or appropriate fieldset)
 7. Associate fieldset with your asset models
 
 ## Important Notes
 
-- The field numbers (87, 88, 89) are used in the script to map data to Snipe-IT
+- The field numbers (87, 88, 89, 90) are used in the script to map data to Snipe-IT
 - These numbers were chosen to avoid conflicts with existing fields 1-86
 - If your Snipe-IT instance uses different field numbers, update the script accordingly
 - Certificate information requires administrator privileges to collect
@@ -88,7 +107,7 @@ Fieldsets: Computers
 
 The following field numbers are already in use (as of this implementation):
 - Fields 1-86: Various existing fields (see complete list below)
-- Fields 87-89: **NEW** - Secure Boot and BIOS information (this implementation)
+- Fields 87-90: **NEW** - Secure Boot, BIOS information, and Script Version (this implementation)
 
 ### Complete List of Existing Custom Fields (Fields 1-86)
 
@@ -185,7 +204,7 @@ After creating the fields and deploying the updated script:
 
 1. Run the script on a test machine
 2. Check the asset in Snipe-IT
-3. Verify all three fields are populated with data
+3. Verify all fields are populated with data (including Script Version showing "1.0")
 4. Review logs for any warnings about expiring certificates
 
 ## Support
