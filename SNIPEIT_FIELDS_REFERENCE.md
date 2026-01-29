@@ -1,6 +1,6 @@
 # Quick Reference: Snipe-IT Custom Fields
 
-## Required Custom Fields for Secure Boot and BIOS Information
+## Required Custom Fields for Secure Boot, BIOS Information, and Script Version Tracking
 
 Add these custom fields to your Snipe-IT instance to support Secure Boot, BIOS information, and script version tracking:
 
