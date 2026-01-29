@@ -7,6 +7,14 @@ Sensitive information and some functions have been removed which may cause some 
 
 ## Recent Updates
 
+### Script Version Tracking
+The script now reports its own version number (currently 1.0) to Snipe-IT, allowing you to track which version of the asset collection script last reported data for each asset. This helps with troubleshooting and ensuring all systems are running the latest version.
+
+**New Information Collected:**
+- **Script Version** - Version of the asset collection script that last reported
+
+See [SNIPEIT_FIELDS_REFERENCE.md](SNIPEIT_FIELDS_REFERENCE.md) for instructions on adding the required custom field (Field 90).
+
 ### Secure Boot and BIOS Information Collection
 The script now collects Secure Boot status, certificate expiry information, and BIOS release dates to help identify systems affected by the [Microsoft Secure Boot certificate expiration issue](https://support.microsoft.com/en-us/topic/windows-secure-boot-certificate-expiration-and-ca-updates-7ff40d33-95dc-4c3c-8725-a9b95457578e).
 

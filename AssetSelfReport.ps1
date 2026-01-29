@@ -45,6 +45,9 @@ $KeyFile = $Config.DellBios.KeyFile;
 $OldPwdFile = $Config.DellBios.OldPwdFile;
 $NewPwdFile = $Config.DellBios.NewPwdFile;
 
+# Script Version
+$ScriptVersion = "1.0";
+
 $StartTime = Get-Date;
 $Today = Get-Date -UFormat "%d-%b-%Y";
 
@@ -169,6 +172,9 @@ $CustomValues = @{};
 #Get UUID
 $UUID = (Get-WmiObject -Class Win32_ComputerSystemProduct).UUID
 $DataHashTable.Add('UUID', $UUID);
+
+#Add Script Version
+$DataHashTable.Add('ScriptVersion', $ScriptVersion);
 
 #Get Bitlocker Status
 $BitLockerRaw = Manage-BDE -Status | Out-String
@@ -1035,6 +1041,7 @@ $CustomValues.Add('_snipeit_bios_windows_license_key_8', $DataHashTable['BIOSWin
 $CustomValues.Add('_snipeit_secure_boot_status_87', $DataHashTable['SecureBootStatus']);
 $CustomValues.Add('_snipeit_secure_boot_cert_expiry_88', $DataHashTable['SecureBootCertExpiry']);
 $CustomValues.Add('_snipeit_bios_release_date_89', $DataHashTable['BiosReleaseDate']);
+$CustomValues.Add('_snipeit_script_version_90', $DataHashTable['ScriptVersion']);
 
 $NextAuditDate = Get-Date;
 If ($NextAuditDate.Month -ne 1) {
