@@ -194,6 +194,113 @@ $BitLockerVolume = $BitLockerVolRaw -join "`n"
 $BitLockerSummary = ($BitLockerBDE, $BitLockerVolume) -join "`n"
 $DataHashTable.Add('BitLockerSummary', $BitLockerSummary);
 
+#Get Secure Boot Status
+Try {
+    $SecureBootEnabled = Confirm-SecureBootUEFI -ErrorAction Stop
+    If ($SecureBootEnabled -eq $true) {
+        $SecureBootStatus = "Enabled"
+    } ElseIf ($SecureBootEnabled -eq $false) {
+        $SecureBootStatus = "Disabled"
+    } Else {
+        $SecureBootStatus = "Unknown"
+    }
+} Catch {
+    $SecureBootStatus = "Not Supported (Legacy BIOS)"
+}
+$DataHashTable.Add('SecureBootStatus', $SecureBootStatus);
+
+#Get Secure Boot Certificate Expiry Information
+$SecureBootCertInfo = "";
+If ($SecureBootStatus -eq "Enabled" -or $SecureBootStatus -eq "Disabled") {
+    Try {
+        # Export Secure Boot db to temp file (sanitize serial number for filename)
+        $SanitizedSerial = $SerialNumber -replace '[\\/:*?"<>|]', '_';
+        $TempDbPath = "$env:TEMP\secureboot_db_$($SanitizedSerial).bin";
+        $SecureBootDb = Get-SecureBootUEFI -Name db -OutputFilePath $TempDbPath -ErrorAction Stop;
+        
+        If (Test-Path $TempDbPath) {
+            $dbBytes = [System.IO.File]::ReadAllBytes($TempDbPath);
+            $Certificates = @();
+            
+            # Parse X.509 certificates from the UEFI variable
+            # X.509 DER format starts with 0x30 0x82
+            For ($i = 0; $i -lt $dbBytes.Length - 3; $i++) {
+                If ($dbBytes[$i] -eq 0x30 -and $dbBytes[$i+1] -eq 0x82) {
+                    # Calculate certificate length from DER encoding
+                    # This handles the most common DER length format (definite length, long form)
+                    $length = ([int]$dbBytes[$i+2] -shl 8) + [int]$dbBytes[$i+3] + 4;
+                    
+                    If (($i + $length) -le $dbBytes.Length -and $length -gt 4 -and $length -lt 10000) {
+                        Try {
+                            $certBytes = $dbBytes[$i..($i+$length-1)];
+                            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList @(,$certBytes);
+                            
+                            $Certificates += [PSCustomObject]@{
+                                Subject = $cert.Subject;
+                                NotAfter = $cert.NotAfter;
+                            }
+                            
+                            $i += $length - 1;
+                        } Catch {
+                            # Not a valid certificate, continue searching
+                        }
+                    }
+                }
+            }
+            
+            # Format certificate expiry information
+            If ($Certificates.Count -gt 0) {
+                $Today = Get-Date;
+                $CertLines = @();
+                
+                ForEach ($cert in $Certificates) {
+                    $DaysUntilExpiry = ($cert.NotAfter - $Today).Days;
+                    $ExpiryDate = $cert.NotAfter.ToString('yyyy-MM-dd');
+                    $Subject = ($cert.Subject -replace 'CN=', '' -replace ',.*', '').Trim();
+                    
+                    If ($DaysUntilExpiry -lt 0) {
+                        $Status = "EXPIRED";
+                    } ElseIf ($DaysUntilExpiry -lt 180) {
+                        $Status = "EXPIRING SOON";
+                    } Else {
+                        $Status = "Valid";
+                    }
+                    
+                    $CertLines += "$Subject : $ExpiryDate ($Status, $DaysUntilExpiry days)";
+                }
+                
+                $SecureBootCertInfo = $CertLines -join "`n";
+                
+                # Check for certificates expiring in 2026 (related to Microsoft issue)
+                $ExpiringIn2026 = $Certificates | Where-Object { $_.NotAfter.Year -eq 2026 -and $_.NotAfter.Month -le 6 };
+                If ($ExpiringIn2026.Count -gt 0) {
+                    WriteLog -Log "[WARNING] Found $($ExpiringIn2026.Count) Secure Boot certificate(s) expiring in early 2026!";
+                }
+            } Else {
+                $SecureBootCertInfo = "No certificates found in db";
+            }
+            
+            # Clean up temp file
+            Remove-Item $TempDbPath -Force -ErrorAction SilentlyContinue;
+        }
+    } Catch {
+        $SecureBootCertInfo = "Unable to read certificates (requires admin privileges)";
+    }
+}
+$DataHashTable.Add('SecureBootCertExpiry', $SecureBootCertInfo);
+
+#Get BIOS Release Date
+If ($Win32_BIOS.ReleaseDate) {
+    Try {
+        $BiosReleaseDate = [System.Management.ManagementDateTimeConverter]::ToDateTime($Win32_BIOS.ReleaseDate);
+        $DataHashTable.Add('BiosReleaseDate', $BiosReleaseDate.ToString('yyyy-MM-dd'));
+    } Catch {
+        $DataHashTable.Add('BiosReleaseDate', '');
+    }
+} Else {
+    $DataHashTable.Add('BiosReleaseDate', '');
+}
+
 $Domain = (Get-WmiObject -Class Win32_ComputerSystem).Domain;
 $DataHashTable.Add('Domain', " $Domain");
 
@@ -925,6 +1032,9 @@ $CustomValues.Add('_snipeit_bitlocker_summary_38', $DataHashTable['BitLockerSumm
 $CustomValues.Add('_snipeit_domain_39', $DataHashTable['Domain']);
 $CustomValues.Add('_snipeit_windows_ui_language_40', $DataHashTable['WindowsUILanguage']);
 $CustomValues.Add('_snipeit_bios_windows_license_key_8', $DataHashTable['BIOSWindowsLicenseKey']);
+$CustomValues.Add('_snipeit_secure_boot_status_87', $DataHashTable['SecureBootStatus']);
+$CustomValues.Add('_snipeit_secure_boot_cert_expiry_88', $DataHashTable['SecureBootCertExpiry']);
+$CustomValues.Add('_snipeit_bios_release_date_89', $DataHashTable['BiosReleaseDate']);
 
 $NextAuditDate = Get-Date;
 If ($NextAuditDate.Month -ne 1) {
