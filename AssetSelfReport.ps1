@@ -172,8 +172,8 @@ $DataHashTable.Add('UUID', $UUID);
 
 #Get Bitlocker Status
 $BitLockerRaw = Manage-BDE -Status | Out-String
-$BitLockerVersionLine = $BitLockerRaw -split "`r?`n" | Where-Object {$_ -match 'BitLocker Version:'}
-$BitLockerVersion = $BitLockerVersionLine -replace 'BitLocker Version:\s*',''
+$BitLockerVersionLine = $BitLockerRaw -split "`r?`n" | Where-Object {$_ -match 'BitLocker Version:'} | Select-Object -First 1
+$BitLockerVersion = ($BitLockerVersionLine -replace 'BitLocker Version:\s*','') -as [string]
 $DataHashTable.Add('BitLockerVersion', $BitLockerVersion);
 
 $BitLockerLines = $BitLockerRaw -split "`r?`n" | Where-Object {
@@ -877,8 +877,12 @@ Switch ($true) {
 $CustomValues.Add('warranty_months', $DataHashTable['WarrantyMonths']);
 # Use only the first MAC address for SnipeIT field (single MAC address validation)
 $PrimaryMacAddress = ($DataHashTable['MacAddress'] -split "`n" | Where-Object { $_ -ne '' })[0];
-If ($PrimaryMacAddress) {
-    $CustomValues.Add('_snipeit_mac_address_1', $PrimaryMacAddress);
+If ($PrimaryMacAddress -and $PrimaryMacAddress -is [string]) {
+    # Ensure it's a properly formatted single string value
+    $CleanMacAddress = $PrimaryMacAddress.Trim() -as [string]
+    If ($CleanMacAddress -match '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$') {
+        $CustomValues.Add('_snipeit_mac_address_1', $CleanMacAddress);
+    }
 }
 $CustomValues.Add('_snipeit_cpu_2', $DataHashTable['CPU']);
 $CustomValues.Add('_snipeit_ram_3', $DataHashTable['RAM']);
@@ -914,7 +918,9 @@ $CustomValues.Add('_snipeit_operating_system_build_6', $DataHashTable['Build']);
 $CustomValues.Add('_snipeit_windows_version_10', $DataHashTable['WindowsVersion']);
 $CustomValues.Add('_snipeit_sku_7', $DataHashTable['SKU']);
 $CustomValues.Add('_snipeit_uuid_35', $DataHashTable['UUID']);
-$CustomValues.Add('_snipeit_bitlocker_version_36', $DataHashTable['BitLockerVersion']);
+# Ensure BitLocker version is a single string, not an array
+$BitLockerVersionValue = $DataHashTable['BitLockerVersion'] -as [string]
+$CustomValues.Add('_snipeit_bitlocker_version_36', $BitLockerVersionValue);
 $CustomValues.Add('_snipeit_bitlocker_summary_38', $DataHashTable['BitLockerSummary']);
 $CustomValues.Add('_snipeit_domain_39', $DataHashTable['Domain']);
 $CustomValues.Add('_snipeit_windows_ui_language_40', $DataHashTable['WindowsUILanguage']);
