@@ -8,7 +8,7 @@ Sensitive information and some functions have been removed which may cause some 
 ## Recent Updates
 
 ### Script Version Tracking
-The script now reports its own version number (currently v1.0) to Snipe-IT, allowing you to track which version of the asset collection script last reported data for each asset. This helps with troubleshooting and ensuring all systems are running the latest version.
+The script now reports its own version number (currently 1.0) to Snipe-IT, allowing you to track which version of the asset collection script last reported data for each asset. This helps with troubleshooting and ensuring all systems are running the latest version.
 
 **New Information Collected:**
 - **Script Version** - Version of the asset collection script that last reported
