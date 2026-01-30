@@ -1212,7 +1212,7 @@ $CustomValues.Add('_snipeit_secure_boot_cert_expiry_88', $DataHashTable['SecureB
 $CustomValues.Add('_snipeit_bios_release_date_89', $DataHashTable['BiosReleaseDate']);
 $CustomValues.Add('_snipeit_script_version_90', $DataHashTable['ScriptVersion']);
 # Add the new date field "Secure Boot Cert Expiry Date" as a date field
-$CustomValues.Add('_snipeit_secure_boot_cert_expiry_date_#91', $DataHashTable['SecureBootCertExpiryDate']);
+$CustomValues.Add('_snipeit_secure_boot_cert_expiry_date_91', $DataHashTable['SecureBootCertExpiryDate']);
 
 $NextAuditDate = Get-Date;
 If ($NextAuditDate.Month -ne 1) {
