@@ -464,6 +464,90 @@ $DataHashTable['SecureBootCertExpiryDate'] = if ($sbSummary.Date) {
 Write-Host ("  Snipe-IT Secure Boot Cert Expiry (text): {0}" -f $DataHashTable['SecureBootCertExpiry']) -ForegroundColor Cyan
 Write-Host ("  Snipe-IT Secure Boot Cert Expiry Date   : {0}" -f $DataHashTable['SecureBootCertExpiryDate']) -ForegroundColor Cyan
 
+# --- Secure Boot Compliance classification ---
+
+# Helper: read DB explicitly to test for 2023 CAs in Default DB (even if Active DB was parsed)
+$entriesDefault = $null
+try {
+    $rawDefault = (Get-SecureBootUEFI -Name dbDefault -ErrorAction Stop).Bytes
+    if ($rawDefault -and $rawDefault.Length -gt 0) {
+        $entriesDefault = Parse-Db -Raw $rawDefault
+    }
+} catch {}
+
+# Patterns for Microsoft CA subjects
+$reMS2011 = 'Microsoft.*(UEFI\s*CA\s*2011|Windows\s+Production\s+PCA\s+2011)'
+$reMS2023 = '(Windows\s+UEFI\s+CA\s+2023|Microsoft\s+UEFI\s+CA\s+2023|Microsoft\s+Corporation\s+KEK\s+2K\s+CA\s+2023|Microsoft\s+Option\s+ROM\s+UEFI\s+CA\s+2023)'
+
+# Active DB (parsed to $certs earlier)
+$ms2011Active  = @($certs | Where-Object { $_.Subject -match $reMS2011 })
+$ms2023Active  = @($certs | Where-Object { $_.Subject -match $reMS2023 })
+
+# Default DB (explicit check regardless of which source we parsed to $certs)
+$ms2023Default = @($entriesDefault | Where-Object { $_.Subject -match $reMS2023 })
+
+# Earliest 2011 expiry we can see (Active first; if none, consider Default)
+$earliest2011 =
+    @($ms2011Active + ($entriesDefault | Where-Object { $_.Subject -match $reMS2011 })) |
+    Where-Object { $_.NotAfter } |
+    Sort-Object NotAfter |
+    Select-Object -First 1
+
+$today = Get-Date
+$daysTo2011 = if ($earliest2011 -and $earliest2011.NotAfter) { ($earliest2011.NotAfter - $today).Days } else { $null }
+
+function Get-SBCompliance {
+    param(
+        [string] $SecureBootStatus,
+        [array]  $Ms2023Active,
+        [array]  $Ms2023Default,
+        [Nullable[int]] $DaysTo2011
+    )
+
+    switch ($SecureBootStatus) {
+        'Enabled' {
+            if ($Ms2023Active.Count -gt 0) {
+                return 'Compliant — 2023 CAs Active'
+            }
+            elseif ($Ms2023Default.Count -gt 0) {
+                # Firmware will repopulate Active DB from Default DB on firmware/OS update or specific tasks
+                return 'Pending — 2023 CA present in Default DB (Active DB still 2011)'
+            }
+            else {
+                if ($DaysTo2011 -eq $null) {
+                    return 'At Risk — 2023 CA missing; 2011 expiry unknown'
+                }
+                elseif ($DaysTo2011 -lt 0) {
+                    return 'At Risk — 2011 CAs expired; 2023 CA missing'
+                }
+                elseif ($DaysTo2011 -lt 180) {
+                    return ('At Risk — 2011 CAs expiring soon ({0} days); 2023 CA missing' -f $DaysTo2011)
+                }
+                else {
+                    return ('At Risk — 2023 CA missing; 2011 CAs expire in {0} days' -f $DaysTo2011)
+                }
+            }
+        }
+        'Disabled' {
+            return 'Secure Boot Disabled — Cert validity irrelevant'
+        }
+        'Not Supported (Legacy BIOS)' {
+            return 'Not Supported (Legacy BIOS) — Compliance N/A'
+        }
+        default {
+            # Includes 'Unknown' or cases where DB is unavailable (Setup Mode or keys cleared)
+            return 'Unknown — DB not available (Setup Mode or keys not enrolled)'
+        }
+    }
+}
+
+$DataHashTable['SecureBootCompliance'] = Get-SBCompliance -SecureBootStatus $SecureBootStatus `
+                                                         -Ms2023Active $ms2023Active `
+                                                         -Ms2023Default $ms2023Default `
+                                                         -DaysTo2011 $daysTo2011
+
+Write-Host ("  Secure Boot Compliance: {0}" -f $DataHashTable['SecureBootCompliance']) -ForegroundColor Cyan
+
 #Get BIOS Release Date
 If ($Win32_BIOS.ReleaseDate) {
     Try {
@@ -1213,6 +1297,9 @@ $CustomValues.Add('_snipeit_bios_release_date_89', $DataHashTable['BiosReleaseDa
 $CustomValues.Add('_snipeit_script_version_90', $DataHashTable['ScriptVersion']);
 # Add the new date field "Secure Boot Cert Expiry Date" as a date field
 $CustomValues.Add('_snipeit_secure_boot_cert_expiry_date_91', $DataHashTable['SecureBootCertExpiryDate']);
+# TEXT field in Snipe-IT: "Secure Boot Compliance"
+$CustomValues.Add('_snipeit_secure_boot_compliance_92', $DataHashTable['SecureBootCompliance']);
+
 
 $NextAuditDate = Get-Date;
 If ($NextAuditDate.Month -ne 1) {
