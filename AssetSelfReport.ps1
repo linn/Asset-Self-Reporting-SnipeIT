@@ -507,36 +507,36 @@ function Get-SBCompliance {
     switch ($SecureBootStatus) {
         'Enabled' {
             if ($Ms2023Active.Count -gt 0) {
-                return 'Compliant — 2023 CAs Active'
+                return 'Compliant - 2023 CAs Active'
             }
             elseif ($Ms2023Default.Count -gt 0) {
                 # Firmware will repopulate Active DB from Default DB on firmware/OS update or specific tasks
-                return 'Pending — 2023 CA present in Default DB (Active DB still 2011)'
+                return 'Pending - 2023 CA present in Default DB (Active DB still 2011)'
             }
             else {
                 if ($DaysTo2011 -eq $null) {
-                    return 'At Risk — 2023 CA missing; 2011 expiry unknown'
+                    return 'At Risk - 2023 CA missing; 2011 expiry unknown'
                 }
                 elseif ($DaysTo2011 -lt 0) {
-                    return 'At Risk — 2011 CAs expired; 2023 CA missing'
+                    return 'At Risk - 2011 CAs expired; 2023 CA missing'
                 }
                 elseif ($DaysTo2011 -lt 180) {
-                    return ('At Risk — 2011 CAs expiring soon ({0} days); 2023 CA missing' -f $DaysTo2011)
+                    return ('At Risk - 2011 CAs expiring soon ({0} days); 2023 CA missing' -f $DaysTo2011)
                 }
                 else {
-                    return ('At Risk — 2023 CA missing; 2011 CAs expire in {0} days' -f $DaysTo2011)
+                    return ('At Risk - 2023 CA missing; 2011 CAs expire in {0} days' -f $DaysTo2011)
                 }
             }
         }
         'Disabled' {
-            return 'Secure Boot Disabled — Cert validity irrelevant'
+            return 'Secure Boot Disabled - Cert validity irrelevant'
         }
         'Not Supported (Legacy BIOS)' {
-            return 'Not Supported (Legacy BIOS) — Compliance N/A'
+            return 'Not Supported (Legacy BIOS) - Compliance N/A'
         }
         default {
             # Includes 'Unknown' or cases where DB is unavailable (Setup Mode or keys cleared)
-            return 'Unknown — DB not available (Setup Mode or keys not enrolled)'
+            return 'Unknown - DB not available (Setup Mode or keys not enrolled)'
         }
     }
 }
