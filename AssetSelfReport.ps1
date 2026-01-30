@@ -217,7 +217,7 @@ $DataHashTable.Add('SecureBootStatus', $SecureBootStatus);
 
 # --- Robust Secure Boot Certificate Expiry ---
 
-Write-Host "Test 2: Secure Boot Certificate Expiry" -ForegroundColor Green
+Write-Host "Secure Boot Certificate Expiry" -ForegroundColor Green
 $SecureBootCertInfo = ""
 
 # GUIDs from UEFI spec
@@ -393,6 +393,76 @@ try {
     $SecureBootCertInfo = "Unable to read/parse Secure Boot DB ($($_.Exception.Message))"
     Write-Host "  $SecureBootCertInfo" -ForegroundColor Yellow
 }
+
+# --- Pick a single meaningful value for Snipe-IT (text + date) ---
+
+function Get-ConciseMicrosoftSecureBootExpiry {
+    param(
+        [Parameter(Mandatory)] [object[]] $Certs,            # entries with Subject / NotAfter
+        [Parameter(Mandatory)] [string]   $SecureBootStatus  # "Enabled" | "Disabled" | etc.
+    )
+
+    if (-not $Certs -or $Certs.Count -eq 0) {
+        return [pscustomobject]@{
+            Text = 'No X.509 certificates (hash-only DB)'
+            Date = $null
+        }
+    }
+
+    # Microsoft CAs relevant to Windows boot trust
+    $msCerts = $Certs | Where-Object {
+        $_.Subject -match 'Microsoft' -and
+        (
+            $_.Subject -match 'Windows\s+Production\s+PCA' -or
+            $_.Subject -match '\bUEFI\s+CA\b'              -or
+            $_.Subject -match 'Option\s+ROM\s+UEFI\s+CA'
+        )
+    }
+
+    if (-not $msCerts) {
+        return [pscustomobject]@{
+            Text = 'No Microsoft UEFI/Boot CAs found'
+            Date = $null
+        }
+    }
+
+    # Earliest expiry among MS CAs = practical “deadline”
+    $earliest = $msCerts | Sort-Object NotAfter | Select-Object -First 1
+    $today    = Get-Date
+    $days     = if ($earliest.NotAfter) { ($earliest.NotAfter - $today).Days } else { $null }
+    $expiry   = if ($earliest.NotAfter) { $earliest.NotAfter.ToString('yyyy-MM-dd') } else { 'N/A' }
+    $subjectCN = ($earliest.Subject -replace '^.*CN=([^,]+).*$','$1')
+
+    $status =
+        if ($days -eq $null)   { 'N/A' }
+        elseif ($days -lt 0)   { 'EXPIRED' }
+        elseif ($days -lt 180) { 'EXPIRING SOON' }
+        else                   { 'Valid' }
+
+    $sbFlag = if ($SecureBootStatus -eq 'Enabled') { '' } else { '[SB OFF] ' }
+
+    [pscustomobject]@{
+        Text = ("{0}{1} : {2} ({3}{4})" -f $sbFlag, $subjectCN, $expiry, $status,
+                $(if ($days -ne $null) { ", $days days" } else { "" }))
+        Date = $earliest.NotAfter   # DateTime (or $null)
+    }
+}
+
+# Produce BOTH fields the rest of the script will use
+$sbSummary = Get-ConciseMicrosoftSecureBootExpiry -Certs $certs -SecureBootStatus $SecureBootStatus
+
+# Long contextual text
+$DataHashTable['SecureBootCertExpiry'] = $sbSummary.Text
+
+# ISO date string (or empty if no date)
+$DataHashTable['SecureBootCertExpiryDate'] = if ($sbSummary.Date) {
+    $sbSummary.Date.ToString('yyyy-MM-dd')
+} else {
+    ''
+}
+
+Write-Host ("  Snipe-IT Secure Boot Cert Expiry (text): {0}" -f $DataHashTable['SecureBootCertExpiry']) -ForegroundColor Cyan
+Write-Host ("  Snipe-IT Secure Boot Cert Expiry Date   : {0}" -f $DataHashTable['SecureBootCertExpiryDate']) -ForegroundColor Cyan
 
 #Get BIOS Release Date
 If ($Win32_BIOS.ReleaseDate) {
@@ -1141,6 +1211,8 @@ $CustomValues.Add('_snipeit_secure_boot_status_87', $DataHashTable['SecureBootSt
 $CustomValues.Add('_snipeit_secure_boot_cert_expiry_88', $DataHashTable['SecureBootCertExpiry']);
 $CustomValues.Add('_snipeit_bios_release_date_89', $DataHashTable['BiosReleaseDate']);
 $CustomValues.Add('_snipeit_script_version_90', $DataHashTable['ScriptVersion']);
+# Add the new date field "Secure Boot Cert Expiry Date" as a date field
+$CustomValues.Add('_snipeit_secure_boot_cert_expiry_date_91', $DataHashTable['SecureBootCertExpiryDate']);
 
 $NextAuditDate = Get-Date;
 If ($NextAuditDate.Month -ne 1) {
