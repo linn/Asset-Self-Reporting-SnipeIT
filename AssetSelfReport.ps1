@@ -225,10 +225,10 @@ $GUID_X509   = [guid]'a5c059a1-94e4-4aa7-87b5-ab155c2bf072'  # EFI_CERT_X509_GUI
 $GUID_SHA256 = [guid]'c1c41626-504c-4092-aca9-41f936934328'  # EFI_CERT_SHA256_GUID
 $GUID_PKCS7  = [guid]'4aafd29d-68df-49ee-8aa9-347d375665a7'  # EFI_CERT_TYPE_PKCS7_GUID'
 
-function Read-UInt32LE([byte[]]$b, [int]$o) { :ToUInt32($b, $o) }
+function Read-UInt32LE([byte[]]$b, [int]$o) { [BitConverter]::ToUInt32($b, $o) }
 function Get-Guid([byte[]]$b, [int]$o) {
     $slice = New-Object byte[] 16
-    :BlockCopy($b, $o, $slice, 0, 16)
+    [Buffer]::BlockCopy($b, $o, $slice, 0, 16)
     # Guid(byte[]) ctor expects little-endian fields as in UEFI storage
     return New-Object System.Guid(,$slice)
 }
@@ -266,7 +266,7 @@ function Parse-Db {
             $dataLen = $sigSize - 16
 
             $sigData = New-Object byte[] $dataLen
-            :BlockCopy($Raw, $ofsOwnerEnd, $sigData, 0, $dataLen)
+            [Buffer]::BlockCopy($Raw, $ofsOwnerEnd, $sigData, 0, $dataLen)
             $ofs += $sigSize
 
             switch ($true) {
@@ -309,7 +309,7 @@ function Parse-Db {
                         Subject     = '<hash entry>'
                         Issuer      = ''
                         NotAfter    = $null
-                        Thumbprint  = (:ToString($sigData) -replace '-', '')
+                        Thumbprint  = ([BitConverter]::ToString($sigData) -replace '-', '')
                     })
                 }
                 default {
@@ -333,7 +333,7 @@ function Parse-Db {
     # De-duplicate by Thumbprint when present (PKCS7 can contain repeats)
     $seen = @{}
     $unique = foreach ($r in $result) {
-        $key = if ($r.Thumbprint) { $r.Type + ':' + $r.Thumbprint } else { :NewGuid().ToString() }
+        $key = if ($r.Thumbprint) { $r.Type + ':' + $r.Thumbprint } else { [guid]::NewGuid().ToString() }
         if (-not $seen.ContainsKey($key)) {
             $seen[$key] = $true
             $r
