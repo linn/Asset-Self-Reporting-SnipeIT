@@ -1211,36 +1211,8 @@ $CustomValues.Add('_snipeit_secure_boot_status_87', $DataHashTable['SecureBootSt
 $CustomValues.Add('_snipeit_secure_boot_cert_expiry_88', $DataHashTable['SecureBootCertExpiry']);
 $CustomValues.Add('_snipeit_bios_release_date_89', $DataHashTable['BiosReleaseDate']);
 $CustomValues.Add('_snipeit_script_version_90', $DataHashTable['ScriptVersion']);
-
-# Add the new date field "Secure Boot Cert Expiry Date" if it exists in Snipe-IT
-# We resolve the field dynamically, so you don't need to hard-code the _snipeit_..._{id} key.
-
-try {
-    $dateFieldName = 'Secure Boot Cert Expiry Date'
-    $dateISO = $DataHashTable['SecureBootCertExpiryDate']  # 'yyyy-MM-dd' or ''
-
-    $dateField = Get-SnipeItField -search $dateFieldName | Where-Object { $_.name -eq $dateFieldName } | Select-Object -First 1
-    if ($dateField) {
-        # Compose the correct custom field key: _snipeit_{slug}_{id}
-        # Most Snipe-IT installs expose the slug in "db_column". Fallback to slug/name if needed.
-        $slug = if ($dateField.db_column) { $dateField.db_column } elseif ($dateField.slug) { $dateField.slug } else { ($dateField.name -replace '\W+', '_' ).ToLower() }
-        $dateKey = "_snipeit_{0}_{1}" -f $slug, $dateField.id
-
-        # Write the date (as ISO text) into the date field; Snipe-IT accepts yyyy-MM-dd for date type
-        if (-not [string]::IsNullOrWhiteSpace($dateISO)) {
-            $CustomValues[$dateKey] = $dateISO
-            WriteLog -Log "[SnipeIT] Will set '$dateFieldName' ($dateKey) to $dateISO"
-        } else {
-            # If no date (e.g., only hashes present), clear the date field
-            $CustomValues[$dateKey] = ''
-            WriteLog -Log "[SnipeIT] '$dateFieldName' cleared (no date available)"
-        }
-    } else {
-        WriteLog -Log "[WARN] Snipe-IT custom field '$dateFieldName' not found. Create it (type=Date) and re-run."
-    }
-} catch {
-    WriteLog -Log "[ERROR] Could not resolve or set 'Secure Boot Cert Expiry Date' field." -Data $_
-}
+# Add the new date field "Secure Boot Cert Expiry Date" as a date field
+$CustomValues.Add('_snipeit_secure_boot_cert_expiry_date_#91', $DataHashTable['SecureBootCertExpiryDate']);
 
 $NextAuditDate = Get-Date;
 If ($NextAuditDate.Month -ne 1) {
