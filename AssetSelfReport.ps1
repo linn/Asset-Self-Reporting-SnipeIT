@@ -46,7 +46,7 @@ $OldPwdFile = $Config.DellBios.OldPwdFile;
 $NewPwdFile = $Config.DellBios.NewPwdFile;
 
 # Script Version
-$ScriptVersion = "1.4";
+$ScriptVersion = "1.5";
 
 $StartTime = Get-Date;
 $Today = Get-Date -UFormat "%d-%b-%Y";
@@ -202,7 +202,10 @@ if (Test-IsBadSerial $Win32_BIOS.SerialNumber) {
 }
 $DataHashTable.Add('SerialNumber', $SerialNumber)
 $DataHashTable.Add('DeviceIdSource', $DeviceIdSource)
-
+# If we identified this device by UUID (custom/white‑box), set Manufacturer='Custom' early
+if ($DataHashTable['DeviceIdSource'] -eq 'UUID') {
+    $DataHashTable['Manufacturer'] = 'Custom'
+}
 # ---- set 'Custom' manufacturer for custom builds ----
 # If we had to use UUID as the device identifier, treat it as a custom build
 if ($DataHashTable['DeviceIdSource'] -eq 'UUID') {
@@ -1267,6 +1270,73 @@ If ($UseDell -eq $true) {
         $DataHashTable.Add('WarrantyMonths', [math]::Round(((New-TimeSpan -Start $DataHashTable['Purchased'] -End $DataHashTable['WarrantyExpiration']).Days) / 30.33));
     }
 }
+# ===================== Extended hardware collectors =====================
+# CPU
+try {
+    $cpu = Get-CimInstance Win32_Processor | Select-Object `
+        Name, Manufacturer, MaxClockSpeed, NumberOfCores, NumberOfLogicalProcessors, Stepping
+    if ($cpu) {
+        $DataHashTable['CPU_Name']         = $cpu.Name
+        $DataHashTable['CPU_Manufacturer'] = $cpu.Manufacturer
+        $DataHashTable['CPU_Speed_MHz']    = $cpu.MaxClockSpeed
+        $DataHashTable['CPU_Cores']        = $cpu.NumberOfCores
+        $DataHashTable['CPU_Threads']      = $cpu.NumberOfLogicalProcessors
+        $DataHashTable['CPU_Stepping']     = $cpu.Stepping
+    }
+} catch {}
+
+# GPU(s)
+try {
+    $gpus = Get-CimInstance Win32_VideoController | Select-Object `
+        Name, AdapterCompatibility, DriverVersion, AdapterRAM
+    if ($gpus) {
+        $gpuInfo = $gpus | ForEach-Object {
+            $ven = if (:IsNullOrWhiteSpace($_.AdapterCompatibility)) { 'UnknownVendor' } else { $_.AdapterCompatibility }
+            "$($_.Name) - $ven - Driver $($_.DriverVersion)"
+        }
+        $DataHashTable['GPU_Details'] = ($gpuInfo -join '; ')
+    }
+} catch {}
+
+# RAM modules
+try {
+    $ram = Get-CimInstance Win32_PhysicalMemory | Select-Object `
+        Manufacturer, PartNumber, SerialNumber, Speed, ConfiguredClockSpeed, Capacity, MemoryType, FormFactor
+    if ($ram) {
+        $ramInfo = $ram | ForEach-Object {
+            $cap = :Round(($_.Capacity/1GB),0)
+            "[$cap`GB] $($_.Manufacturer) $($_.PartNumber) $($_.Speed)MHz / Configured $($_.ConfiguredClockSpeed)MHz"
+        }
+        $DataHashTable['RAM_Module_Details'] = ($ramInfo -join '; ')
+    }
+} catch {}
+
+# Motherboard / BIOS
+try {
+    $board  = Get-CimInstance Win32_BaseBoard
+    $csprod = Get-CimInstance Win32_ComputerSystemProduct
+    $bios   = Get-CimInstance Win32_BIOS
+    if ($board) {
+        $DataHashTable['Board_Manufacturer'] = $board.Manufacturer
+        $DataHashTable['Board_Model']        = $board.Product
+    }
+    if ($csprod) { $DataHashTable['Board_SKU']    = $csprod.SKUNumber }
+    if ($bios)   { $DataHashTable['Bios_Version'] = $bios.SMBIOSBIOSVersion }
+} catch {}
+
+# Storage devices
+try {
+    $disks = Get-CimInstance Win32_DiskDrive | Select-Object `
+        Model, Manufacturer, SerialNumber, Size, MediaType, InterfaceType
+    if ($disks) {
+        $diskInfo = $disks | ForEach-Object {
+            $sizeGB = :Round(($_.Size/1GB),0)
+            "$($_.Model) | $($_.MediaType) | $($_.InterfaceType) | ${sizeGB}GB"
+        }
+        $DataHashTable['Storage_Devices'] = ($diskInfo -join '; ')
+    }
+} catch {}
+# =======================================================================
 
 ########################################################################################################################################################################################################
 # Update SnipeIT 
