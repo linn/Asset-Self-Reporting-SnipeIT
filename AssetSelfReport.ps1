@@ -59,6 +59,40 @@ $RandomNumber = Get-Random -Minimum 0 -Maximum 300;
 $SystemInformation = Get-WmiObject -Namespace root\wmi -Class MS_SystemInformation;
 $SoftwareLicensingServiceInfo = Get-WmiObject -query 'select * from SoftwareLicensingService';
 
+# --- BEGIN: serial -> UUID fallback bootstrap ---
+function Test-IsBadSerial([string]$s) {
+    if ([string]::IsNullOrWhiteSpace($s)) { return $true }
+    $n = $s.Trim()
+    $u = $n.ToUpperInvariant()
+    $bad = @(
+        'DEFAULT STRING',
+        'TO BE FILLED BY O.E.M.',
+        'TO BE FILLED BY O.E.M',
+        'TO BE FILLED BY OEM',
+        'NONE',
+        'UNKNOWN',
+        'SYSTEM SERIAL NUMBER',
+        '123456789',
+        '1234567890',
+        'N/A'
+    )
+    if ($n.Length -le 3) { return $true }
+    return $bad -contains $u
+}
+
+# Retrieve UUID early so it can be used in paths & Snipe lookups if needed
+try {
+    $UUID = (Get-WmiObject -Class Win32_ComputerSystemProduct -ErrorAction Stop).UUID
+} catch { $UUID = $null }
+
+# Normalize $SerialNumber immediately (so filenames, logs, and Snipe calls use the chosen ID)
+if (Test-IsBadSerial $SerialNumber) {
+    if (-not [string]::IsNullOrWhiteSpace($UUID)) {
+        $SerialNumber = $UUID
+    }
+}
+# --- END: serial -> UUID fallback bootstrap ---
+
 # List of default, erroneous, and redundant apps that may be installed that we do not need listed under "installed software".
 # The script will still notify you if install status changes for these, but will not list these apps in SnipeIT.
 $DefaultSoftware = @(
@@ -132,8 +166,14 @@ If ($DeviceName -eq "CCCJ-FS01") {
     $LogFileDir = $LogFileDir -replace "c",'R:';
     $RecordFileDir = $RecordFileDir -replace "\\\\fs01.criminology.fsu.edu",'R:';
 }
-If (!$SerialNumber -OR $SerialNumber -eq '       ') {
-    If (Test-Path -Path 'C:\CCCJ\ASR\sn.txt' -PathType Leaf) { $SerialNumber = Get-Content -Path 'C:\CCCJ\ASR\sn.txt'; }
+# Prefer a locally provided serial if present; otherwise keep normalized Serial/UUID
+$LocalSNFile = 'C:\CCCJ\ASR\sn.txt'
+if (Test-Path -Path $LocalSNFile -PathType Leaf) {
+    $candidate = (Get-Content -Path $LocalSNFile) -as [string]
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) { $SerialNumber = $candidate.Trim() }
+}
+# If still bad here, try UUID again
+if (Test-IsBadSerial $SerialNumber -and -not [string]:: IsNullOrWhiteSpace($UUID)) { $SerialNumber = $UUID 
 }
 If ($DeviceName -eq 'EPS-102D-PC01') {
     $RandomNumber = 0;
@@ -146,13 +186,27 @@ If ($DeviceName -eq 'EPS-102D-PC01') {
 ########################################################################################################################################################################################################
 # Static Variables 
 ########################################################################################################################################################################################################
-#$DataHashTable.Add('SerialNumber', $SerialNumber);
 
-If (-NOT ($Win32_BIOS.SerialNumber)) { 
-    # EmailAlert -Subject "No BIOS Serial Number" -Body ($Win32_BIOS | Out-String); 
-    $DataHashTable.Add('SerialNumber', $DeviceName);
-} else {
-    $DataHashTable.Add('SerialNumber', $Win32_BIOS.SerialNumber);
+# Decide the final identifier and record the source used
+$DeviceIdSource = 'SerialNumber'
+if (Test-IsBadSerial $Win32_BIOS.SerialNumber) {
+    if (-not [string]::IsNullOrWhiteSpace($UUID)) {
+        $DeviceIdSource = 'UUID'
+        $SerialNumber   = $UUID
+    } else {
+        # Both Serial and UUID are unusable -> last resort hostname with alert
+        $DeviceIdSource = 'Hostname'
+        $SerialNumber   = $DeviceName
+        EmailAlert -Subject "No usable Serial/UUID" -Body ($Win32_BIOS | Out-String)
+    }
+}
+$DataHashTable.Add('SerialNumber', $SerialNumber)
+$DataHashTable.Add('DeviceIdSource', $DeviceIdSource)
+
+# ---- set 'Custom' manufacturer for custom builds ----
+# If we had to use UUID as the device identifier, treat it as a custom build
+if ($DataHashTable['DeviceIdSource'] -eq 'UUID') {
+    $DataHashTable['Manufacturer'] = 'Custom'
 }
 
 $Win32_ComputerSystem = Get-WmiObject -Class Win32_ComputerSystem;
