@@ -648,8 +648,10 @@ CheckFilesAndDirectories -Dir $LocalFileDir,$LogFileDir,$RecordFileDir -File $Lo
 #WriteLog -Log "Checking Required Modules...";
 If ($Win32_ComputerSystem.Model -eq "Virtual Machine") {
     $RequiredModules = 'SnipeitPS', 'PSWindowsUpdate', 'ActiveDirectory';
-} Else { 
-    $RequiredModules = 'SnipeitPS', 'DellBIOSProvider', 'ActiveDirectory', 'PSWindowsUpdate'; 
+} ElseIf ($Win32_ComputerSystem.Manufacturer -like '*Dell*') {
+    $RequiredModules = 'SnipeitPS', 'DellBIOSProvider', 'ActiveDirectory', 'PSWindowsUpdate';
+} Else {
+    $RequiredModules = 'SnipeitPS', 'ActiveDirectory', 'PSWindowsUpdate';
 }
 $RequiredModules | ForEach-Object {
     Try {
