@@ -5,10 +5,12 @@ This is a script I use in my environment to automatically update all domain asse
 
 Sensitive information and some functions have been removed which may cause some errors in a few functions. You will need to modify this for you environment.
 
+Releases are managed by incrementing the $ScriptVersion value as part of your pull request. This will trigger the pipeline to create a new release zip file for subsequent deployment.
+
 ## Recent Updates
 
 ### Script Version Tracking
-The script now reports its own version number (currently 1.0) to Snipe-IT, allowing you to track which version of the asset collection script last reported data for each asset. This helps with troubleshooting and ensuring all systems are running the latest version.
+The script now reports its own version number to Snipe-IT, allowing you to track which version of the asset collection script last reported data for each asset. This helps with troubleshooting and ensuring all systems are running the latest version.
 
 **New Information Collected:**
 - **Script Version** - Version of the asset collection script that last reported
