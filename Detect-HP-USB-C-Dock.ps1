@@ -142,8 +142,9 @@ If ($disconnectedDocks.Count -gt 0) {
 }
 
 # Detect dock Ethernet adapter (typically Realtek USB GbE on HP docks)
+# Evidence shows adapters named "Realtek USB GbE Family Controller" on dock-connected systems
 $ethAdapters = Get-NetAdapter | Where-Object {
-    $_.InterfaceDescription -match "HP|Realtek|USB" -and $_.Status -eq "Up"
+    $_.InterfaceDescription -match "(Realtek.*USB.*GbE|HP.*Ethernet|USB.*GbE|USB.*Gigabit)" -and $_.Status -eq "Up"
 }
 If ($ethAdapters) {
     Write-Host "`nDock Ethernet Adapter(s):" -ForegroundColor Cyan
@@ -161,35 +162,45 @@ If ($ConfigFile -and (Test-Path $ConfigFile)) {
     $Snipe = $Config.Snipe
 
     Try {
-        Import-Module SnipeitPS -ErrorAction Stop
-        Connect-SnipeitPS -URL $Snipe.Url -apiKey $Snipe.Token
-
-        # Look up the PC asset in SnipeIT by BIOS serial number (same approach as AssetSelfReport.ps1)
-        $pcSerial = (Get-CimInstance -ClassName Win32_BIOS).SerialNumber
-        $SnipeAsset = Get-SnipeItAsset -asset_serial $pcSerial
-
-        # Retry once on error (same pattern as AssetSelfReport.ps1)
-        If ($SnipeAsset.StatusCode -eq 'InternalServerError') {
-            $SnipeAsset = Get-SnipeItAsset -asset_serial $pcSerial
-        }
-
-        If ($SnipeAsset -and $SnipeAsset.assigned_to) {
-            Write-Host "`nSnipeIT Asset Information:" -ForegroundColor Cyan
-            Write-Host "  Asset Name:    $($SnipeAsset.name)" -ForegroundColor White
-            Write-Host "  Assigned To:   $($SnipeAsset.assigned_to.name)" -ForegroundColor White
-            Write-Host "  Username:      $($SnipeAsset.assigned_to.username)" -ForegroundColor White
-        } ElseIf ($SnipeAsset -and -not $SnipeAsset.assigned_to) {
-            Write-Host "`nSnipeIT Asset Information:" -ForegroundColor Cyan
-            Write-Host "  Asset Name:    $($SnipeAsset.name)" -ForegroundColor White
-            Write-Host "  Assigned To:   (not assigned)" -ForegroundColor Yellow
+        If (-not (Get-Module -ListAvailable -Name SnipeitPS)) {
+            Write-Host "`nSnipeitPS module is not installed. Install it with: Install-Module -Name SnipeitPS" -ForegroundColor Red
+            Write-Host "Skipping SnipeIT lookup." -ForegroundColor Yellow
         } Else {
-            # Fallback: search by hostname
-            $SnipeAsset = Get-SnipeItAsset -Search $Hostname | Where-Object { $_.name -eq $Hostname } | Select-Object -First 1
+            Import-Module SnipeitPS -ErrorAction Stop
+            Connect-SnipeitPS -URL $Snipe.Url -apiKey $Snipe.Token
+
+            # Look up the PC asset in SnipeIT by BIOS serial number (same approach as AssetSelfReport.ps1)
+            $pcSerial = $null
+            Try {
+                $pcSerial = (Get-CimInstance -ClassName Win32_BIOS).SerialNumber
+            } Catch {
+                Write-Host "`nUnable to retrieve BIOS serial number, falling back to hostname lookup." -ForegroundColor Yellow
+            }
+
+            $SnipeAsset = $null
+            If ($pcSerial) {
+                $SnipeAsset = Get-SnipeItAsset -asset_serial $pcSerial
+
+                # Retry once on error (same pattern as AssetSelfReport.ps1)
+                If ($SnipeAsset.StatusCode -eq 'InternalServerError') {
+                    $SnipeAsset = Get-SnipeItAsset -asset_serial $pcSerial
+                }
+            }
+
+            # Fallback: search by hostname if serial lookup returned nothing
+            If (-not $SnipeAsset -or $SnipeAsset.StatusCode) {
+                $SnipeAsset = Get-SnipeItAsset -Search $Hostname | Where-Object { $_.name -eq $Hostname } | Select-Object -First 1
+            }
+
             If ($SnipeAsset -and $SnipeAsset.assigned_to) {
                 Write-Host "`nSnipeIT Asset Information:" -ForegroundColor Cyan
                 Write-Host "  Asset Name:    $($SnipeAsset.name)" -ForegroundColor White
                 Write-Host "  Assigned To:   $($SnipeAsset.assigned_to.name)" -ForegroundColor White
                 Write-Host "  Username:      $($SnipeAsset.assigned_to.username)" -ForegroundColor White
+            } ElseIf ($SnipeAsset -and -not $SnipeAsset.assigned_to) {
+                Write-Host "`nSnipeIT Asset Information:" -ForegroundColor Cyan
+                Write-Host "  Asset Name:    $($SnipeAsset.name)" -ForegroundColor White
+                Write-Host "  Assigned To:   (not assigned)" -ForegroundColor Yellow
             } Else {
                 Write-Host "`nPC not found in SnipeIT or not assigned to a user." -ForegroundColor Yellow
             }
