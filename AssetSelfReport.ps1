@@ -1595,6 +1595,15 @@ If (!$SnipeAsset) {
     } Catch { WriteLog -Log "[ERROR] Unable to Update SnipeIT Asset." -Data $_; }
 }
 
+# Mark asset as audited if machine has an IP address in the 10.2.0.0/16 range
+$AuditSubnetIp = $DataHashTable['IpAddress'] -split "`n" | Where-Object { $_ -match '^10\.2\.' } | Select-Object -First 1;
+If ($AuditSubnetIp -and $SnipeAsset -and $SnipeAsset.asset_tag) {
+    Try {
+        Set-SnipeitAssetAudit -asset_tag $SnipeAsset.asset_tag -next_audit_date (Get-Date -UFormat "%Y-%m-%d");
+        WriteLog -Log "[SnipeIT] Marked asset as audited (IP $AuditSubnetIp is in 10.2.0.0/16 range).";
+    } Catch { WriteLog -Log "[ERROR] Unable to mark asset as audited in SnipeIT." -Data $_; }
+}
+
 # Check for Duplicate objects in SnipeIT
 $DuplicateNames = Get-SnipeItAsset -Search $DataHashTable['DeviceName'] | Where-Object { $_.serial -ne $DataHashTable['SerialNumber'] -AND $_.assigned_to.name -NotLike "$($DeviceName)*" };
 If ($DuplicateNames.StatusCode -eq 'InternalServerError') {
