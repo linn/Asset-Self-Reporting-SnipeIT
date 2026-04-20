@@ -1599,7 +1599,7 @@ If (!$SnipeAsset) {
 $AuditSubnetIp = $DataHashTable['IpAddress'] -split "`n" | Where-Object { $_ -match '^10\.2\.' } | Select-Object -First 1;
 If ($AuditSubnetIp -and $SnipeAsset -and $SnipeAsset.asset_tag) {
     Try {
-        Set-SnipeitAssetAudit -asset_tag $SnipeAsset.asset_tag -next_audit_date (Get-Date -UFormat "%Y-%m-%d");
+        Set-SnipeitAssetAudit -asset_tag $SnipeAsset.asset_tag;
         WriteLog -Log "[SnipeIT] Marked asset as audited (IP $AuditSubnetIp is in 10.2.0.0/16 range).";
     } Catch { WriteLog -Log "[ERROR] Unable to mark asset as audited in SnipeIT." -Data $_; }
 }
