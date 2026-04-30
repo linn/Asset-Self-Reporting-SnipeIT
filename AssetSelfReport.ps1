@@ -46,7 +46,7 @@ $OldPwdFile = $Config.DellBios.OldPwdFile;
 $NewPwdFile = $Config.DellBios.NewPwdFile;
 
 # Script Version
-$ScriptVersion = "1.4";
+$ScriptVersion = "1.6";
 
 $StartTime = Get-Date;
 $Today = Get-Date -UFormat "%d-%b-%Y";
@@ -1595,13 +1595,22 @@ If (!$SnipeAsset) {
     } Catch { WriteLog -Log "[ERROR] Unable to Update SnipeIT Asset." -Data $_; }
 }
 
+# Mark asset as audited if machine has an IP address in the 10.2.0.0/16 range
+$AuditSubnetIp = $DataHashTable['IpAddress'] -split "`n" | Where-Object { $_ -match '^10\.2\.' } | Select-Object -First 1;
+If ($AuditSubnetIp -and $SnipeAsset -and $SnipeAsset.asset_tag) {
+    Try {
+        New-SnipeitAudit -tag $SnipeAsset.asset_tag;
+        WriteLog -Log "[SnipeIT] Marked asset as audited (IP $AuditSubnetIp is in 10.2.0.0/16 range).";
+    } Catch { WriteLog -Log "[ERROR] Unable to mark asset as audited in SnipeIT." -Data $_; }
+}
+
 # Check for Duplicate objects in SnipeIT
 $DuplicateNames = Get-SnipeItAsset -Search $DataHashTable['DeviceName'] | Where-Object { $_.serial -ne $DataHashTable['SerialNumber'] -AND $_.assigned_to.name -NotLike "$($DeviceName)*" };
 If ($DuplicateNames.StatusCode -eq 'InternalServerError') {
     EmailAlert -Subject "Error searching SnipeIT" -Body "(Duplicate Check)`n$($DuplicateNames | Format-List | Out-String)";
 } ElseIf ($DuplicateNames.Count -gt 0) {
     ForEach ($Duplicate in $DuplicateNames) {
-        $UpdatedAsset = Set-SnipeItAsset -name '' -id $Duplicate.id -customfields { _snipeit_ip_address_9 = ''; };
+        $UpdatedAsset = Set-SnipeItAsset -name '' -id $Duplicate.id -customfields @{ _snipeit_ip_address_9 = ''; };
     }
     WriteLog -Log "[ERROR] Duplicate Information Found in SnipeIT.";
     EmailAlert -Subject "Multiple Assets with Identical Data Found. Removed data from inventory object." -Body "Asset Name: $($DeviceName)`n`n$($DuplicateNames | Format-List | Out-String)";
