@@ -46,7 +46,7 @@ $OldPwdFile = $Config.DellBios.OldPwdFile;
 $NewPwdFile = $Config.DellBios.NewPwdFile;
 
 # Script Version
-$ScriptVersion = "1.4";
+$ScriptVersion = "1.5";
 
 $StartTime = Get-Date;
 $Today = Get-Date -UFormat "%d-%b-%Y";
