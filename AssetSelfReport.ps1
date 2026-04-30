@@ -1610,7 +1610,7 @@ If ($DuplicateNames.StatusCode -eq 'InternalServerError') {
     EmailAlert -Subject "Error searching SnipeIT" -Body "(Duplicate Check)`n$($DuplicateNames | Format-List | Out-String)";
 } ElseIf ($DuplicateNames.Count -gt 0) {
     ForEach ($Duplicate in $DuplicateNames) {
-        $UpdatedAsset = Set-SnipeItAsset -name '' -id $Duplicate.id -customfields { _snipeit_ip_address_9 = ''; };
+        $UpdatedAsset = Set-SnipeItAsset -name '' -id $Duplicate.id -customfields @{ _snipeit_ip_address_9 = ''; };
     }
     WriteLog -Log "[ERROR] Duplicate Information Found in SnipeIT.";
     EmailAlert -Subject "Multiple Assets with Identical Data Found. Removed data from inventory object." -Body "Asset Name: $($DeviceName)`n`n$($DuplicateNames | Format-List | Out-String)";
