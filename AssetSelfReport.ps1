@@ -46,7 +46,7 @@ $OldPwdFile = $Config.DellBios.OldPwdFile;
 $NewPwdFile = $Config.DellBios.NewPwdFile;
 
 # Script Version
-$ScriptVersion = "1.4";
+$ScriptVersion = "1.5";
 
 $StartTime = Get-Date;
 $Today = Get-Date -UFormat "%d-%b-%Y";
@@ -1593,6 +1593,15 @@ If (!$SnipeAsset) {
             WriteLog -Log "[DEBUG] SnipeAsset content:" -Data $SnipeAsset;
         }
     } Catch { WriteLog -Log "[ERROR] Unable to Update SnipeIT Asset." -Data $_; }
+}
+
+# Mark asset as audited if machine has an IP address in the 10.2.0.0/16 range
+$AuditSubnetIp = $DataHashTable['IpAddress'] -split "`n" | Where-Object { $_ -match '^10\.2\.' } | Select-Object -First 1;
+If ($AuditSubnetIp -and $SnipeAsset -and $SnipeAsset.asset_tag) {
+    Try {
+        New-SnipeitAudit -tag $SnipeAsset.asset_tag;
+        WriteLog -Log "[SnipeIT] Marked asset as audited (IP $AuditSubnetIp is in 10.2.0.0/16 range).";
+    } Catch { WriteLog -Log "[ERROR] Unable to mark asset as audited in SnipeIT." -Data $_; }
 }
 
 # Check for Duplicate objects in SnipeIT
