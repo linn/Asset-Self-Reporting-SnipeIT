@@ -3,8 +3,8 @@ param (
 )
 
 ########################################################################################################################################################################################################
-# HP USB-C Dock Detection Script
-# Identifies connected HP USB-C docks, extracts serial numbers, outputs hostname, and queries SnipeIT for the assigned user.
+# HP USB-C/Thunderbolt Dock Detection Script
+# Identifies connected HP USB-C and Thunderbolt docks, extracts serial numbers, outputs hostname, and queries SnipeIT for the assigned user.
 ########################################################################################################################################################################################################
 
 # HP vendor ID
@@ -14,9 +14,11 @@ $hpVid = "03F0"
 # Evidence collected from physical systems:
 #   - PID 046B: HP USB-C Dock G5 (seen on PC1485, PC1701)
 #   - PID 0A6B: HP USB-C/A Universal Dock G2 (seen on PC1486)
+#   - PID 0269: HP Thunderbolt Dock (seen on PC1485, Issue #24)
 $knownDockPIDs = @{
     "046B" = "HP USB-C Dock G5"
     "0A6B" = "HP USB-C/A Universal Dock G2"
+    "0269" = "HP Thunderbolt Dock"
 }
 
 # Additional HP dock-related component PIDs (hubs, audio, etc.) that are part of a dock
@@ -30,7 +32,6 @@ $knownDockPIDs = @{
 #   0C6B - Generic SuperSpeed USB Hub (G2)
 #   0D6B - Generic SuperSpeed USB Hub (G2)
 #   0E6B - Generic USB Hub (G2)
-#   0269 - HP Thunderbolt Dock Audio Headset
 
 $Hostname = $env:COMPUTERNAME
 
@@ -72,10 +73,10 @@ ForEach ($device in $allHpDevices) {
     }
 }
 
-# Fallback: name-based detection for HP USB-C docks not matched by known PIDs.
+# Fallback: name-based detection for HP docks not matched by known PIDs.
 # This handles new or unknown dock models that include "Dock" in the FriendlyName.
 $nameMatchedDocks = Get-PnpDevice | Where-Object {
-    $_.FriendlyName -match "HP.*USB.*Dock" -and
+    $_.FriendlyName -match "HP.*(USB|Thunderbolt).*Dock" -and
     $_.InstanceId -notmatch "&MI_" -and
     $_.InstanceId -match "^USB\\" -and
     $_.InstanceId -notin $detectedDocks.InstanceId
