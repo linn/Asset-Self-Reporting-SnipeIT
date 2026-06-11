@@ -13,6 +13,30 @@ Remove-Variable -Name Record -ErrorAction 'SilentlyContinue';
 Remove-Variable -Name EmailParams -ErrorAction 'SilentlyContinue';
 Remove-Variable -Name Config -ErrorAction 'SilentlyContinue';
 
+########################################################################################################################################################################################################
+# Junk serial detection helper
+########################################################################################################################################################################################################
+function Test-InvalidInventorySerial {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $true
+    }
+
+    $v = $Value.Trim()
+
+    if (
+        $v -match '^To be filled by O\.?E\.?M\.?$' -or
+        $v -match '^Default string$' -or
+        $v -match '^System Serial Number$' -or
+        $v -match '^Unknown$' -or
+        $v -match '^None$'
+    ) {
+        return $true
+    }
+
+    return $false
+}
 
 ########################################################################################################################################################################################################
 # Static Variables 
@@ -46,15 +70,46 @@ $OldPwdFile = $Config.DellBios.OldPwdFile;
 $NewPwdFile = $Config.DellBios.NewPwdFile;
 
 # Script Version
-$ScriptVersion = "1.6";
+$ScriptVersion = "1.7";
 
 $StartTime = Get-Date;
 $Today = Get-Date -UFormat "%d-%b-%Y";
 
 $DeviceName = hostname;
 [HashTable]$DataHashTable = @{};
-$Win32_BIOS = Get-WMIObject -Class Win32_BIOS;
-$SerialNumber = $Win32_BIOS.SerialNumber;
+$Win32_BIOS = Get-WmiObject -Class Win32_BIOS
+$Win32_ComputerSystemProduct = Get-WmiObject -Class Win32_ComputerSystemProduct
+$Win32_BaseBoard = Get-WmiObject -Class Win32_BaseBoard
+
+$BiosSerial  = ($Win32_BIOS.SerialNumber | Out-String).Trim()
+$UUID        = ($Win32_ComputerSystemProduct.UUID | Out-String).Trim()
+$BoardSerial = ($Win32_BaseBoard.SerialNumber | Out-String).Trim()
+
+# Optional override file (keep your existing logic)
+$OverrideSerial = $null
+if (Test-Path -Path 'C:\CCCJ\ASR\sn.txt' -PathType Leaf) {
+    $OverrideSerial = (Get-Content -Path 'C:\CCCJ\ASR\sn.txt' | Select-Object -First 1).Trim()
+}
+
+if (-not (Test-InvalidInventorySerial $OverrideSerial)) {
+    $SerialNumber = $OverrideSerial
+}
+elseif (-not (Test-InvalidInventorySerial $BiosSerial)) {
+    $SerialNumber = $BiosSerial
+}
+elseif (
+    -not [string]::IsNullOrWhiteSpace($UUID) -and
+    $UUID -notmatch '^FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF$' -and
+    $UUID -notmatch '^00000000-0000-0000-0000-000000000000$'
+) {
+    $SerialNumber = $UUID
+}
+elseif (-not (Test-InvalidInventorySerial $BoardSerial)) {
+    $SerialNumber = "MB-$BoardSerial"
+}
+else {
+    $SerialNumber = $DeviceName
+}
 $RandomNumber = Get-Random -Minimum 0 -Maximum 300;
 $SystemInformation = Get-WmiObject -Namespace root\wmi -Class MS_SystemInformation;
 $SoftwareLicensingServiceInfo = Get-WmiObject -query 'select * from SoftwareLicensingService';
@@ -148,12 +203,7 @@ If ($DeviceName -eq 'EPS-102D-PC01') {
 ########################################################################################################################################################################################################
 #$DataHashTable.Add('SerialNumber', $SerialNumber);
 
-If (-NOT ($Win32_BIOS.SerialNumber)) { 
-    # EmailAlert -Subject "No BIOS Serial Number" -Body ($Win32_BIOS | Out-String); 
-    $DataHashTable.Add('SerialNumber', $DeviceName);
-} else {
-    $DataHashTable.Add('SerialNumber', $Win32_BIOS.SerialNumber);
-}
+$DataHashTable.Add('SerialNumber', $SerialNumber)
 
 $Win32_ComputerSystem = Get-WmiObject -Class Win32_ComputerSystem;
 $CsvFile = "$RecordFileDir\$($SerialNumber).csv";
