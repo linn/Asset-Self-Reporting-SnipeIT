@@ -19,7 +19,7 @@ Remove-Variable -Name Config -ErrorAction 'SilentlyContinue';
 function Test-InvalidInventorySerial {
     param([string]$Value)
 
-    if ([string]:: {
+    if ([string]::IsNullOrWhiteSpace($Value)) {
         return $true
     }
 
@@ -30,8 +30,7 @@ function Test-InvalidInventorySerial {
         $v -match '^Default string$' -or
         $v -match '^System Serial Number$' -or
         $v -match '^Unknown$' -or
-        $v -match '^None$' -or
-        $v -match '^[\s-]+$'
+        $v -match '^None$'
     ) {
         return $true
     }
@@ -86,7 +85,7 @@ $BiosSerial  = ($Win32_BIOS.SerialNumber | Out-String).Trim()
 $UUID        = ($Win32_ComputerSystemProduct.UUID | Out-String).Trim()
 $BoardSerial = ($Win32_BaseBoard.SerialNumber | Out-String).Trim()
 
-# Optional manual override file still takes precedence
+# Optional override file (keep your existing logic)
 $OverrideSerial = $null
 if (Test-Path -Path 'C:\CCCJ\ASR\sn.txt' -PathType Leaf) {
     $OverrideSerial = (Get-Content -Path 'C:\CCCJ\ASR\sn.txt' | Select-Object -First 1).Trim()
@@ -99,7 +98,7 @@ elseif (-not (Test-InvalidInventorySerial $BiosSerial)) {
     $SerialNumber = $BiosSerial
 }
 elseif (
-    -not [string]:: -and
+    -not [string]::IsNullOrWhiteSpace($UUID) -and
     $UUID -notmatch '^FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF$' -and
     $UUID -notmatch '^00000000-0000-0000-0000-000000000000$'
 ) {
