@@ -70,7 +70,7 @@ $OldPwdFile = $Config.DellBios.OldPwdFile;
 $NewPwdFile = $Config.DellBios.NewPwdFile;
 
 # Script Version
-$ScriptVersion = "1.7";
+$ScriptVersion = "1.8";
 
 $StartTime = Get-Date;
 $Today = Get-Date -UFormat "%d-%b-%Y";
@@ -703,30 +703,65 @@ If ($Win32_ComputerSystem.Model -eq "Virtual Machine") {
 } Else {
     $RequiredModules = 'SnipeitPS', 'ActiveDirectory', 'PSWindowsUpdate';
 }
+# Detect OS type once to decide how to install RSAT/AD tools
+$osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+$isServer = $false
+If ($osInfo) { $isServer = ($osInfo.ProductType -ne 1) }
+
 $RequiredModules | ForEach-Object {
     Try {
-        $Mdle = $_;
-        #WriteLog -Log "Checking for $Mdle...";
+        $Mdle = $_
         If (!(Get-Module -ListAvailable -Name $Mdle)) {
-            WriteLog -Log "$Mdle not found. Installing...";
+            WriteLog -Log "$Mdle not found. Installing..."
             If ($Mdle -eq 'ActiveDirectory') {
-                Add-WindowsCapability -Online -Name "Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0";
-                Install-WindowsFeature RSAT-AD-PowerShell;
-            } Else { Install-Module -Name $Mdle -Force; }
-        } Else {
-            $Latest = [String](Find-Module -Name SnipeitPS | Sort-Object Version -Descending)[0].version;
-            $Installed = [String](Get-Module -ListAvailable SnipeitPS | Select-Object -First 1).version;
-            If ([System.Version]$Latest -gt [System.Version]$Installed) {
-                WriteLog -Log "[UPDATE] Updating $($Mdle)...";
-                Update-Module -Name $Mdle -Force;
+                If ($isServer) {
+                    If (Get-Command -Name Install-WindowsFeature -ErrorAction SilentlyContinue) {
+                        Try {
+                            Install-WindowsFeature RSAT-AD-PowerShell -ErrorAction Stop
+                            WriteLog -Log "Installed RSAT-AD-PowerShell via Install-WindowsFeature."
+                        } Catch {
+                            WriteLog -Log "[ERROR] Failed to install RSAT via Install-WindowsFeature. $_"
+                        }
+                    } Else {
+                        WriteLog -Log "[WARN] Install-WindowsFeature not available on this Server. Skipping RSAT AD install."
+                    }
+                } Else {
+                    If (Get-Command -Name Add-WindowsCapability -ErrorAction SilentlyContinue) {
+                        Try {
+                            Add-WindowsCapability -Online -Name "Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0" -ErrorAction Stop
+                            WriteLog -Log "Installed RSAT ActiveDirectory via Add-WindowsCapability."
+                        } Catch {
+                            WriteLog -Log "[ERROR] Failed to install RSAT via Add-WindowsCapability. $_"
+                        }
+                    } Else {
+                        WriteLog -Log "[WARN] Add-WindowsCapability not available on this Client. Skipping RSAT AD install."
+                    }
+                }
+            } Else {
+                Try {
+                    Install-Module -Name $Mdle -Force -AllowClobber -ErrorAction Stop
+                    WriteLog -Log "Installed PowerShell module $Mdle."
+                } Catch {
+                    WriteLog -Log "[ERROR] Failed to Install-Module $Mdle. $_"
+                    EmailAlert -Subject "[ERROR] Installing Module" -Body "$( $_ | Out-String)"
+                }
             }
+        } Else {
+            Try {
+                $Latest = [String](Find-Module -Name $Mdle -ErrorAction SilentlyContinue | Sort-Object Version -Descending | Select-Object -First 1).version
+                $Installed = [String](Get-Module -ListAvailable -Name $Mdle | Select-Object -First 1).version
+                If ($Latest -and [System.Version]$Latest -gt [System.Version]$Installed) {
+                    WriteLog -Log "[UPDATE] Updating $($Mdle)..."
+                    Update-Module -Name $Mdle -Force
+                }
+            } Catch { }
         }
-        Try { Import-Module -Name $Mdle -Force; }
-        Catch {
-            WriteLog -Log "[ERROR] Unable to Import $($Mdle) Module." -Data $_;
-            EmailAlert -Subject "[ERROR] Importing Module" -Body "$($_ | Out-String)";
+
+        Try { Import-Module -Name $Mdle -Force } Catch {
+            WriteLog -Log "[ERROR] Unable to Import $($Mdle) Module." -Data $_
+            EmailAlert -Subject "[ERROR] Importing Module" -Body "$( $_ | Out-String)"
         }
-    } Catch { WriteLog -Log "[ERROR] $($_ | Out-String)"; }
+    } Catch { WriteLog -Log "[ERROR] $($_ | Out-String)" }
 }
 #WriteLog -Log "Requirements Installed and Loaded.";
 
