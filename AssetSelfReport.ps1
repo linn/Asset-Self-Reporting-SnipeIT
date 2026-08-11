@@ -623,7 +623,17 @@ if ($RegkeyResult.Default -eq "0809") {
 }
 $DataHashTable.Add('WindowsUILanguage', $UILanguage);
 
+#Get Monitor Information
+$MonitorData = Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorID
 
+$MonitorInfo = ($MonitorData | ForEach-Object {
+    $Manufacturer = ($_.ManufacturerName | Where-Object {$_ -ne 0} | ForEach-Object {[char]$_}) -join ''
+    $Model = ($_.UserFriendlyName | Where-Object {$_ -ne 0} | ForEach-Object {[char]$_}) -join ''
+    $Serial = ($_.SerialNumberID | Where-Object {$_ -ne 0} | ForEach-Object {[char]$_}) -join ''
+
+    "$Manufacturer $Model [$Serial]"
+}) -join "; "
+$DataHashTable.Add('MonitorInfo', $MonitorInfo);
 ########################################################################################################################################################################################################
 # Functions
 ########################################################################################################################################################################################################
@@ -1386,6 +1396,7 @@ $CustomValues.Add('_snipeit_script_version_90', $DataHashTable['ScriptVersion'])
 $CustomValues.Add('_snipeit_secure_boot_cert_expiry_date_91', $DataHashTable['SecureBootCertExpiryDate']);
 # TEXT field in Snipe-IT: "Secure Boot Compliance"
 $CustomValues.Add('_snipeit_secure_boot_compliance_92', $DataHashTable['SecureBootCompliance']);
+$CustomValues.Add('_snipeit_monitors_93', $DataHashTable['MonitorInfo']);
 
 
 $NextAuditDate = Get-Date;
