@@ -70,7 +70,7 @@ $OldPwdFile = $Config.DellBios.OldPwdFile;
 $NewPwdFile = $Config.DellBios.NewPwdFile;
 
 # Script Version
-$ScriptVersion = "1.9";
+$ScriptVersion = "2.0";
 
 $StartTime = Get-Date;
 $Today = Get-Date -UFormat "%d-%b-%Y";
@@ -800,7 +800,7 @@ $DataHashTable.Add('Build', $Win32_OperatingSystem.Version);
 $Win_Version = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion
 $DataHashTable.Add('WindowsVersion', $Win_Version);
 $DataHashTable.Add('BIOSWindowsLicenseKey', $SoftwareLicensingServiceInfo.OA3xOriginalProductKey);
-If ($DataHashTable['OS'] -Contains "Server") { $ModelCatID = $Snipe.ServerCatID; }
+If ($DataHashTable['OS'] -Like "*Server*") { $ModelCatID = $Snipe.ServerCatID; }
 
 
 ########################################################################################################################################################################################################
@@ -1428,7 +1428,7 @@ If (!$SnipeAsset) {
                 ##########################################
             }
             If ($Model.count -eq 0) {
-                If ($DataHashTable['OS'] -Contains "Server") { $ModelCatID = $Snipe.ServerCatID; } 
+                If ($DataHashTable['OS'] -Like "*Server*") { $ModelCatID = $Snipe.ServerCatID; } 
                 Else { $ModelCatID = $Snipe.WorkstationCatID; }
                 WriteLog -Log "[SnipeIT] Creating a new model in Snipe-IT";
                 $Model = New-SnipeItModel -name $DataHashTable['Model'] -manufacturer_id $ManufacturerID -fieldset_id $Snipe.FieldSetID -category_id $ModelCatID;
@@ -1448,21 +1448,25 @@ If (!$SnipeAsset) {
 } Else {
     # Check Assigned User and Remote Users
     $UserAssigned = $SnipeAsset.assigned_to.username;
-    $RemoteUsers = ($RemoteDesktopUsers | Where-Object { $_.ObjectClass -ne 'Group' } | Select-Object -Property @{ Name="Name"; Expression={ ($_.Name).Split("\")[1] } }).Name;
-    If ($RemoteUsers -NotContains $UserAssigned) {
-        WriteLog -Log "Adding $($UserAssigned) to local Remote Desktop Users Group...";
-        Add-LocalGroupMember -Group "Remote Desktop Users" -Member $UserAssigned;
-        $DataHashTable['RemoteUsers'] = (Get-LocalGroupMember -Group "Remote Desktop Users").Name -join "`n";
-    }
-    If ($RemoteUsers.Count -gt 1) {
-        WriteLog -Log "Found more than one user assigned to the local Remote Desktop Users Group...";
-        $UnauthorizedRemoteUsers = $RemoteUsers | Where-Object { $_ -ne $UserAssigned }
-        $UnauthorizedRemoteUsers | Get-ADUser | ForEach-Object {
-            WriteLog -Log "Removed $($_.SamAccountName) from the local Remote Desktop Users Group...";
-            Remove-LocalGroupMember -Group "Remote Desktop Users" -Member $_.SamAccountName;
+    # Only enforce Remote Desktop Users membership when the asset is assigned to a user,
+    # otherwise every individual user would be treated as unauthorized and removed.
+    If (![string]::IsNullOrWhiteSpace($UserAssigned)) {
+        $RemoteUsers = ($RemoteDesktopUsers | Where-Object { $_.ObjectClass -ne 'Group' } | Select-Object -Property @{ Name="Name"; Expression={ ($_.Name).Split("\")[1] } }).Name;
+        If ($RemoteUsers -NotContains $UserAssigned) {
+            WriteLog -Log "Adding $($UserAssigned) to local Remote Desktop Users Group...";
+            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $UserAssigned;
             $DataHashTable['RemoteUsers'] = (Get-LocalGroupMember -Group "Remote Desktop Users").Name -join "`n";
         }
-        EmailAlert -Subject "Unauthorized Remote Users" -Body "The following accounts were removed from the local Remote Desktop Users group:`n$($UnauthorizedRemoteUsers)";
+        If ($RemoteUsers.Count -gt 1) {
+            WriteLog -Log "Found more than one user assigned to the local Remote Desktop Users Group...";
+            $UnauthorizedRemoteUsers = $RemoteUsers | Where-Object { $_ -ne $UserAssigned }
+            $UnauthorizedRemoteUsers | Get-ADUser | ForEach-Object {
+                WriteLog -Log "Removed $($_.SamAccountName) from the local Remote Desktop Users Group...";
+                Remove-LocalGroupMember -Group "Remote Desktop Users" -Member $_.SamAccountName;
+                $DataHashTable['RemoteUsers'] = (Get-LocalGroupMember -Group "Remote Desktop Users").Name -join "`n";
+            }
+            EmailAlert -Subject "Unauthorized Remote Users" -Body "The following accounts were removed from the local Remote Desktop Users group:`n$($UnauthorizedRemoteUsers)";
+        }
     }
     # Check Asset Tag
     If ($SnipeAsset.asset_tag) { $DataHashTable.Add('AssetTag', $SnipeAsset.asset_tag); }
@@ -1485,16 +1489,21 @@ If (!$SnipeAsset) {
     # Check Webcam
     If ($Webcam -AND !($Webcam.Count -gt 1)) {
         $SnipeWebcam = Get-SnipeItAsset -location_id $SnipeAsset.location.id | Where-Object { $Webcam -like $_.model.name };
-        If ($SnipeWebcam) { 
+        If ($SnipeWebcam) {
+            # Use the DB column names Snipe-IT reports for these fields rather than hard-coded IDs
+            $WebcamGuidField = $SnipeWebcam.custom_fields.GUID.field;
+            $WebcamHostField = $SnipeWebcam.custom_fields.Host.field;
             If (!$SnipeWebcam.custom_fields.GUID.value -OR $SnipeWebcam.custom_fields.GUID.value -eq '') {
-                Set-SnipeitAsset -id $SnipeWebcam.id -customfields @{ _snipeit_guid_25=$WebcamGuid; }
+                If ($WebcamGuidField) { Set-SnipeitAsset -id $SnipeWebcam.id -customfields @{ $WebcamGuidField=$WebcamGuid; } }
+                Else { WriteLog -Log "[ERROR] Webcam model has no 'GUID' custom field."; }
             } ElseIf ($SnipeWebcam.custom_fields.GUID.value -ne $WebcamGuid) {
                 WriteLog -Log "Webcam GUIDs Do not Match!";
                 EmailAlert -Subject "Webcam GUIDs Do Not Match!" -Body "Assigned Webcam GUID: $($SnipeWebcam.custom_fields.GUID.value)`nSeen Webcam GUID: $($WebcamGuid)"
             }
             If (!$SnipeWebcam.custom_fields.Host.value -OR $SnipeWebcam.custom_fields.Host.value -eq '') {
-                Set-SnipeitAsset -id $SnipeWebcam.id -customfields @{ _snipeit_host_26=$DeviceName; }
-            } If ($SnipeWebcam.custom_fields.Host.value -ne $DeviceName) {
+                If ($WebcamHostField) { Set-SnipeitAsset -id $SnipeWebcam.id -customfields @{ $WebcamHostField=$DeviceName; } }
+                Else { WriteLog -Log "[ERROR] Webcam model has no 'Host' custom field."; }
+            } ElseIf ($SnipeWebcam.custom_fields.Host.value -ne $DeviceName) {
                 WriteLog -Log "Assigned Hosts for the Webcam do not Match!";
                 EmailAlert -Subject "Webcam Hosts Does Not Match!" -Body "Assigned Webcam Host: $($SnipeWebcam.custom_fields.Host.value)`nSeen Webcam Host: $($DeviceName)"
             }
@@ -1701,9 +1710,11 @@ If ($AuditSubnetIp -and $SnipeAsset -and $SnipeAsset.asset_tag) {
 }
 
 # Check for Duplicate objects in SnipeIT
-$DuplicateNames = Get-SnipeItAsset -Search $DataHashTable['DeviceName'] | Where-Object { $_.serial -ne $DataHashTable['SerialNumber'] -AND $_.assigned_to.name -NotLike "$($DeviceName)*" };
-If ($DuplicateNames.StatusCode -eq 'InternalServerError') {
-    EmailAlert -Subject "Error searching SnipeIT" -Body "(Duplicate Check)`n$($DuplicateNames | Format-List | Out-String)";
+$DuplicateSearch = Get-SnipeItAsset -Search $DataHashTable['DeviceName'];
+# -Search is a fuzzy full-text match (e.g. "PC1" also returns "PC12"), so only treat exact name matches as duplicates
+$DuplicateNames = @($DuplicateSearch | Where-Object { $_.name -eq $DataHashTable['DeviceName'] -AND $_.serial -ne $DataHashTable['SerialNumber'] -AND $_.assigned_to.name -NotLike "$($DeviceName)*" });
+If ($DuplicateSearch.StatusCode -eq 'InternalServerError') {
+    EmailAlert -Subject "Error searching SnipeIT" -Body "(Duplicate Check)`n$($DuplicateSearch | Format-List | Out-String)";
 } ElseIf ($DuplicateNames.Count -gt 0) {
     ForEach ($Duplicate in $DuplicateNames) {
         $UpdatedAsset = Set-SnipeItAsset -name '' -id $Duplicate.id -customfields @{ _snipeit_ip_address_9 = ''; };
